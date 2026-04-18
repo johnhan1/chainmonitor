@@ -1,0 +1,50 @@
+{
+  "id": null,
+  "uid": "chainmonitor-overview",
+  "title": "ChainMonitor Overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "HTTP Requests / 5m",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(increase(cm_http_requests_total[5m]))",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "App Up",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "max(up{job=\"chainmonitor-app\"})",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      }
+    }
+  ],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  }
+}

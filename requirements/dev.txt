@@ -1,0 +1,7 @@
+-r base.txt
+pytest==8.4.1
+ruff==0.12.10
+mypy==1.17.1
+types-redis==4.6.0.20241004
+pre-commit==4.3.0
+

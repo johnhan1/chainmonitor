@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/dev.txt
+
+      - name: Lint
+        run: |
+          . .venv/bin/activate
+          python -m ruff check src tests
+
+      - name: Migration Check
+        run: |
+          . .venv/bin/activate
+          export CM_POSTGRES_DSN=sqlite+pysqlite:///./ci_migration.db
+          python -m alembic downgrade base
+          python -m alembic upgrade head
+
+      - name: Test
+        run: |
+          . .venv/bin/activate
+          python -m pytest -q
+
+      - name: Smoke Check
+        run: |
+          . .venv/bin/activate
+          python -m uvicorn src.app.main:app --host 127.0.0.1 --port 8000 &
+          APP_PID=$!
+          sleep 3
+          curl --fail http://127.0.0.1:8000/healthz
+          curl --fail http://127.0.0.1:8000/metrics
+          kill $APP_PID
+

@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: chainmonitor
+    orgId: 1
+    folder: ChainMonitor
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/dashboards

@@ -1,0 +1,38 @@
+groups:
+  - name: chainmonitor-alerts
+    rules:
+      - alert: ChainMonitorAppDown
+        expr: up{job="chainmonitor-app"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ChainMonitor app is down"
+          description: "Prometheus cannot scrape app:8000 for over 2 minutes."
+
+      - alert: HighAppRequestVolume
+        expr: increase(cm_http_requests_total[5m]) > 5000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unexpected high request volume"
+          description: "cm_http_requests_total increased by more than 5000 in 5 minutes."
+
+      - alert: BscPipelineNoRecentSuccess
+        expr: time() - cm_bsc_pipeline_last_success_unixtime > 180
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "BSC pipeline has no recent success"
+          description: "No successful BSC pipeline run in the last 3 minutes."
+
+      - alert: BscPipelineFailures
+        expr: increase(cm_bsc_pipeline_runs_total{status="failed"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "BSC pipeline failures detected"
+          description: "At least one BSC pipeline run failed in the last 5 minutes."
