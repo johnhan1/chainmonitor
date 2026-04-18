@@ -4,11 +4,11 @@ Revision ID: d4e5f6071829
 Revises: c3d4e5f60718
 Create Date: 2026-04-18 20:10:00.000000
 """
+
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "d4e5f6071829"
@@ -70,4 +70,3 @@ def downgrade() -> None:
         type_="unique",
     )
     op.drop_table("bsc_pipeline_runs")
-

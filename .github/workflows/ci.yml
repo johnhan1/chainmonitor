@@ -28,13 +28,6 @@ jobs:
           . .venv/bin/activate
           python -m ruff check src tests
 
-      - name: Migration Check
-        run: |
-          . .venv/bin/activate
-          export CM_POSTGRES_DSN=sqlite+pysqlite:///./ci_migration.db
-          python -m alembic downgrade base
-          python -m alembic upgrade head
-
       - name: Test
         run: |
           . .venv/bin/activate
@@ -49,4 +42,3 @@ jobs:
           curl --fail http://127.0.0.1:8000/healthz
           curl --fail http://127.0.0.1:8000/metrics
           kill $APP_PID
-

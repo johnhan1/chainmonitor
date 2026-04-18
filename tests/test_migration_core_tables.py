@@ -15,4 +15,3 @@ def test_core_migration_contains_expected_tables() -> None:
 
     for table in expected_tables:
         assert f'"{table}"' in content
-

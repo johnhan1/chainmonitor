@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.app.services.bsc_pipeline import BscPipelineService
 from src.shared.config import get_settings
@@ -40,7 +40,6 @@ class BscPipelineScheduler:
                 logger.info("bsc scheduler tick completed: %s", summary.model_dump())
             except Exception as exc:  # noqa: BLE001
                 logger.exception("bsc scheduler tick failed: %s", exc)
-            now = datetime.now(tz=timezone.utc)
+            now = datetime.now(tz=UTC)
             sleep_seconds = interval - (int(now.timestamp()) % interval)
             await asyncio.sleep(max(1, sleep_seconds))
-

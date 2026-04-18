@@ -172,4 +172,3 @@ Conviction = FinalScore * DataConfidence * RegimeFit
 - 模拟实盘严格引入滑点与延迟。
 - 因子半衰期监控，失效自动降权。
 - 链别独立参数与风控阈值，不做“一刀切”。
-

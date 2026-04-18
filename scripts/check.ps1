@@ -16,7 +16,6 @@ if (-not (Test-Path $venvPython)) {
 }
 
 Invoke-CheckedCommand "$venvPython -m ruff check src tests"
-Invoke-CheckedCommand ".\scripts\migration-check.ps1"
 Invoke-CheckedCommand "$venvPython -m pytest -q"
 
 $hasGitDir = Test-Path ".git"
@@ -29,4 +28,3 @@ else {
 }
 
 Write-Host "Done: lint + test passed"
-

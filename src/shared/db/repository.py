@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from typing import Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
-
 from src.shared.schemas.pipeline import FeatureRowInput, MarketTickInput, ScoreRowInput
 
 
@@ -92,11 +91,13 @@ class PipelineRepository:
             """
             INSERT INTO token_scores (
                 strategy_version, chain_id, token_id, ts_minute, alpha_score, momentum_score,
-                smart_money_score, narrative_score, risk_penalty, final_score, conviction, confidence
+                smart_money_score, narrative_score, risk_penalty, final_score, conviction,
+                confidence
             )
             VALUES (
                 :strategy_version, :chain_id, :token_id, :ts_minute, :alpha_score, :momentum_score,
-                :smart_money_score, :narrative_score, :risk_penalty, :final_score, :conviction, :confidence
+                :smart_money_score, :narrative_score, :risk_penalty, :final_score, :conviction,
+                :confidence
             )
             ON CONFLICT (strategy_version, chain_id, token_id, ts_minute) DO UPDATE SET
                 alpha_score = EXCLUDED.alpha_score,
@@ -115,7 +116,8 @@ class PipelineRepository:
                 ts_minute, strategy_version, chain_id, token_id, tier, rank, reason_codes
             )
             VALUES (
-                :ts_minute, :strategy_version, :chain_id, :token_id, :tier, :rank, CAST(:reason_codes AS JSON)
+                :ts_minute, :strategy_version, :chain_id, :token_id, :tier, :rank,
+                CAST(:reason_codes AS JSON)
             )
             ON CONFLICT (strategy_version, chain_id, token_id, ts_minute) DO UPDATE SET
                 tier = EXCLUDED.tier,
@@ -194,7 +196,7 @@ class PipelineRepository:
             "strategy_version": strategy_version,
             "ts_minute": ts_minute,
             "trigger": trigger,
-            "started_at": datetime.now(tz=timezone.utc),
+            "started_at": datetime.now(tz=UTC),
         }
         with self.engine.begin() as conn:
             result = conn.execute(sql, params)
@@ -225,7 +227,7 @@ class PipelineRepository:
         )
         params = {
             "status": status,
-            "ended_at": datetime.now(tz=timezone.utc),
+            "ended_at": datetime.now(tz=UTC),
             "tick_count": tick_count,
             "candidate_count": candidate_count,
             "error_message": error_message,
@@ -266,7 +268,7 @@ class PipelineRepository:
                     "chain_id": chain_id,
                     "strategy_version": strategy_version,
                     "ts_minute": ts_minute,
-                    "started_at": datetime.now(tz=timezone.utc),
+                    "started_at": datetime.now(tz=UTC),
                 },
             )
 

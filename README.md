@@ -7,7 +7,7 @@
 - 开发运行时：Python `3.11/3.12` + 本地 `.venv`（禁止全局 `pip install`）
 - 容器底座：`app`、`PostgreSQL`、`ClickHouse`、`Redis`、`MinIO`、`Prometheus`、`Grafana`
 - 数据迁移：Alembic 多批次迁移（核心表 + 约束 + 批次扩展）
-- 工程质量：`ruff`、`pytest`、`pre-commit`、CI 迁移检查与 smoke
+- 工程质量：`ruff`、`pytest`、`pre-commit`、CI smoke
 - 可观测性：`/metrics`、Prometheus 抓取、Grafana 预置 dashboard、Prometheus 告警规则
 - 运维脚手架：统一命令入口、数据库备份恢复、full/lite 两套 compose
 
@@ -22,7 +22,7 @@
 .\scripts\dev.ps1 -Command all
 ```
 
-等价执行：初始化环境 -> 启动 full stack -> 迁移升级 -> 迁移链校验 -> lint/test -> smoke。
+等价执行：初始化环境 -> 启动 full stack -> 迁移升级 -> lint/test -> smoke。
 
 ## 常用命令
 
@@ -38,9 +38,6 @@
 
 # 升级迁移
 .\scripts\dev.ps1 -Command migrate
-
-# 迁移链校验（downgrade base -> upgrade head，临时 SQLite）
-.\scripts\dev.ps1 -Command migrate-check
 
 # 质量检查
 .\scripts\dev.ps1 -Command check
@@ -79,8 +76,6 @@
 - `c3d4e5f60718_batch3_tables.py`（第三批）
 - `d4e5f6071829_bsc_pipeline_runs.py`（BSC 调度运行状态表）
 
-真实迁移测试：`tests/test_migration_upgrade_real_db.py`（临时 SQLite 执行 `alembic upgrade head`）。
-
 ## 目录结构
 
 ```text
@@ -97,7 +92,6 @@ scripts/
   setup.ps1
   check.ps1
   smoke.ps1
-  migration-check.ps1
   db-upgrade.ps1
   db-revision.ps1
   db-backup.ps1
@@ -122,6 +116,5 @@ src/
 
 - 本地 `.\scripts\dev.ps1 -Command all` 可一次通过
 - `docker compose -f deploy\docker-compose.yml ps` 全部核心服务健康
-- `alembic downgrade base && alembic upgrade head` 在 CI 可重复通过
 - `healthz/metrics/prometheus/grafana` 可访问
-- CI 包含 `lint -> migration -> tests -> smoke` 全链路
+- CI 包含 `lint -> tests -> smoke` 全链路

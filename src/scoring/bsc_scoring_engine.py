@@ -85,4 +85,3 @@ class BscScoringEngine:
         if conviction < 55:
             reasons.append("low_conviction")
         return reasons or ["insufficient_signal"]
-

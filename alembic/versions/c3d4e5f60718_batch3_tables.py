@@ -4,11 +4,11 @@ Revision ID: c3d4e5f60718
 Revises: b2c3d4e5f607
 Create Date: 2026-04-18 17:20:00.000000
 """
+
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "c3d4e5f60718"
@@ -25,7 +25,9 @@ def upgrade() -> None:
         sa.Column("token_id", sa.String(length=128), nullable=False),
         sa.Column("ts_minute", sa.DateTime(timezone=True), nullable=False),
         sa.Column("sm_buy_wallets_30m", sa.Integer(), nullable=False, server_default=sa.text("0")),
-        sa.Column("sm_netflow_usd_30m", sa.Numeric(24, 10), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "sm_netflow_usd_30m", sa.Numeric(24, 10), nullable=False, server_default=sa.text("0")
+        ),
         sa.Column(
             "sm_winrate_weighted_score",
             sa.Numeric(10, 6),
@@ -58,7 +60,9 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("0"),
         ),
-        sa.Column("dev_activity_score", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "dev_activity_score", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")
+        ),
         sa.Column(
             "cross_chain_narrative_score",
             sa.Numeric(10, 6),

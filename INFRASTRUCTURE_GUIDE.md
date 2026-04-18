@@ -90,9 +90,8 @@ requirements/
 scripts/
   dev.ps1                      # 统一命令入口（最重要）
   setup.ps1                    # 初始化 .venv
-  check.ps1                    # lint + migration-check + pytest + pre-commit
+  check.ps1                    # lint + pytest + pre-commit
   smoke.ps1                    # smoke 检查
-  migration-check.ps1          # downgrade base -> upgrade head
   db-upgrade.ps1               # alembic upgrade head
   db-revision.ps1              # 创建新 migration
   db-backup.ps1                # 备份 PostgreSQL
@@ -170,8 +169,7 @@ git --version
 - `down`：停止 full/lite 编排
 - `reset`：删除卷并重建 full 环境
 - `migrate`：执行 `alembic upgrade head`
-- `migrate-check`：执行迁移链自检（`downgrade base` 再 `upgrade head`）
-- `check`：代码质量检查（含迁移检查和测试）
+- `check`：代码质量检查（含代码规范和测试）
 - `smoke`：基础服务可达性检查
 - `backup`：PostgreSQL 备份
 - `restore`：PostgreSQL 恢复
@@ -275,21 +273,7 @@ git --version
 .\scripts\dev.ps1 -Command migrate
 ```
 
-### 11.3 迁移链自检（必须掌握）
-
-```powershell
-.\scripts\dev.ps1 -Command migrate-check
-```
-
-该命令会：
-
-- 使用临时 SQLite DSN
-- 执行 `alembic downgrade base`
-- 再执行 `alembic upgrade head`
-
-用于发现迁移链断裂、依赖错误、回滚不完整等问题。
-
-### 11.4 新建迁移
+### 11.3 新建迁移
 
 ```powershell
 .\scripts\db-revision.ps1 -Message "your migration message"
@@ -312,7 +296,6 @@ git --version
 包含：
 
 - ruff 静态检查
-- 迁移链检查
 - pytest
 - pre-commit 全文件检查（当本地有 git）
 
@@ -322,9 +305,8 @@ CI（`.github/workflows/ci.yml`）执行顺序：
 
 1. 安装依赖
 2. Lint
-3. Migration Check（`downgrade base` + `upgrade head`）
-4. Test
-5. Smoke（启动 uvicorn 后请求 healthz/metrics）
+3. Test
+4. Smoke（启动 uvicorn 后请求 healthz/metrics）
 
 ---
 
@@ -454,7 +436,6 @@ docker compose -f deploy\docker-compose.yml logs --tail=200
 
 - `.\scripts\dev.ps1 -Command all` 在干净环境可通过
 - full/lite 均可启动
-- migration-check 可重复通过
 - healthz/metrics/prometheus/grafana 可访问
 - CI 全链路通过
 - 备份与恢复脚本可执行
@@ -466,20 +447,18 @@ docker compose -f deploy\docker-compose.yml logs --tail=200
 1. 安装 Python + Docker + Git
 2. 执行 `.\scripts\dev.ps1 -Command all`
 3. 打开 `healthz`/`metrics`/Prometheus/Grafana
-4. 执行一次 `migrate-check`
-5. 阅读 `scripts/dev.ps1` 理解命令入口
-6. 跑一次 `backup` 和 `restore`（可选）
+4. 阅读 `scripts/dev.ps1` 理解命令入口
+5. 跑一次 `backup` 和 `restore`（可选）
 
 完成以上步骤后，你已经可以在该项目上开始正式开发。
 
 ---
 
-## 19. 你最常用的 5 条命令
+## 19. 你最常用的 4 条命令
 
 ```powershell
 .\scripts\dev.ps1 -Command all
 .\scripts\dev.ps1 -Command up
 .\scripts\dev.ps1 -Command check
-.\scripts\dev.ps1 -Command migrate-check
 .\scripts\dev.ps1 -Command down
 ```

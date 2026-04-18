@@ -10,9 +10,6 @@ def setup_logging(level: str = "INFO") -> None:
     root.handlers.clear()
 
     handler = logging.StreamHandler(sys.stdout)
-    formatter = JsonFormatter(
-        "%(asctime)s %(levelname)s %(name)s %(message)s"
-    )
+    formatter = JsonFormatter("%(asctime)s %(levelname)s %(name)s %(message)s")
     handler.setFormatter(formatter)
     root.addHandler(handler)
-

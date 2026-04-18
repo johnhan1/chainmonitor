@@ -39,4 +39,3 @@ class CandidateSnapshot(BaseModel):
     tier: str
     rank: int
     reason_codes: list[str] = Field(default_factory=list)
-

@@ -142,7 +142,7 @@
 ### 4.2.1 作用
 
 - 主事务数据库（配置、元数据、策略版本、迁移状态）
-- Alembic 默认目标数据库（非 migrate-check 场景）
+- Alembic 默认目标数据库
 
 ### 4.2.2 对应配置
 
@@ -172,8 +172,6 @@
 
 - 端口冲突（5432 已占用）
   - 处理：释放端口或修改映射
-- 迁移失败但数据库可连接
-  - 处理：先执行 `migrate-check` 验证迁移链逻辑
 
 ---
 
@@ -353,17 +351,7 @@
 3. `pytest -q`
 4. `pre_commit run --all-files`（若可用）
 
-## 6.4 `migration-check.ps1`
-
-核心作用：不依赖 PostgreSQL，直接验证迁移链正确性。
-
-机制：
-
-- 临时设置 `CM_POSTGRES_DSN=sqlite+pysqlite:///./ci_migration_local.db`
-- `alembic downgrade base`
-- `alembic upgrade head`
-
-## 6.5 `smoke.ps1`
+## 6.4 `smoke.ps1`
 
 检查端点：
 
@@ -372,7 +360,7 @@
 - `9090/-/healthy`
 - `3000/api/health`
 
-## 6.6 `db-backup.ps1` / `db-restore.ps1`
+## 6.5 `db-backup.ps1` / `db-restore.ps1`
 
 - backup：调用容器内 `pg_dump`
 - restore：管道输入到容器内 `psql`
@@ -401,7 +389,6 @@
 - 一个迁移文件只做一类变更（结构/索引/约束）
 - 名称可读（动词 + 对象）
 - 增加约束时考虑历史数据兼容性
-- 提交前必须过 `migrate-check`
 
 ---
 
@@ -415,9 +402,8 @@ CI 文件：`.github/workflows/ci.yml`
 
 1. 创建 `.venv` 并安装依赖
 2. ruff
-3. migration-check（在 CI SQLite DSN 下）
-4. pytest
-5. 启动 uvicorn 做 smoke（healthz + metrics）
+3. pytest
+4. 启动 uvicorn 做 smoke（healthz + metrics）
 
 ### 8.2 为什么先迁移再测试
 
@@ -556,4 +542,3 @@ CI 文件：`.github/workflows/ci.yml`
 # 4) 收工
 .\scripts\dev.ps1 -Command down
 ```
-

@@ -4,11 +4,11 @@ Revision ID: a1b2c3d4e5f6
 Revises: 30f4e21d3d32
 Create Date: 2026-04-18 16:30:00.000000
 """
+
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "a1b2c3d4e5f6"
@@ -44,11 +44,17 @@ def upgrade() -> None:
         sa.Column("chain_id", sa.String(length=32), nullable=False),
         sa.Column("token_id", sa.String(length=128), nullable=False),
         sa.Column("ts_minute", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("netflow_usd_5m", sa.Numeric(24, 10), nullable=False, server_default=sa.text("0")),
-        sa.Column("netflow_usd_30m", sa.Numeric(24, 10), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "netflow_usd_5m", sa.Numeric(24, 10), nullable=False, server_default=sa.text("0")
+        ),
+        sa.Column(
+            "netflow_usd_30m", sa.Numeric(24, 10), nullable=False, server_default=sa.text("0")
+        ),
         sa.Column("large_buy_count_30m", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("new_holder_30m", sa.Integer(), nullable=False, server_default=sa.text("0")),
-        sa.Column("holder_churn_24h", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "holder_churn_24h", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")
+        ),
     )
     op.create_index(
         "ix_onchain_flow_features_chain_token_ts",
@@ -62,15 +68,21 @@ def upgrade() -> None:
         sa.Column("chain_id", sa.String(length=32), nullable=False),
         sa.Column("token_id", sa.String(length=128), nullable=False),
         sa.Column("ts_minute", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("contract_risk_score", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")),
-        sa.Column("lp_concentration", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "contract_risk_score", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")
+        ),
+        sa.Column(
+            "lp_concentration", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")
+        ),
         sa.Column(
             "holder_concentration_top10",
             sa.Numeric(10, 6),
             nullable=False,
             server_default=sa.text("0"),
         ),
-        sa.Column("wash_trade_score", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "wash_trade_score", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")
+        ),
         sa.Column("honeypot_flag", sa.Boolean(), nullable=False, server_default=sa.false()),
     )
     op.create_index(
@@ -88,8 +100,12 @@ def upgrade() -> None:
         sa.Column("ts_minute", sa.DateTime(timezone=True), nullable=False),
         sa.Column("alpha_score", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")),
         sa.Column("momentum_score", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")),
-        sa.Column("smart_money_score", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")),
-        sa.Column("narrative_score", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "smart_money_score", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")
+        ),
+        sa.Column(
+            "narrative_score", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")
+        ),
         sa.Column("risk_penalty", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")),
         sa.Column("final_score", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")),
         sa.Column("conviction", sa.Numeric(10, 6), nullable=False, server_default=sa.text("0")),

@@ -1,8 +1,7 @@
-from datetime import datetime
 from contextlib import asynccontextmanager
+from datetime import datetime
 
-from fastapi import FastAPI
-from fastapi import HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 from src.app.services.bsc_pipeline import BscPipelineService
 from src.app.services.bsc_scheduler import BscPipelineScheduler
@@ -26,6 +25,7 @@ async def lifespan(_: FastAPI):
     finally:
         if settings.bsc_scheduler_enabled:
             await bsc_scheduler.stop()
+
 
 app = FastAPI(
     title=settings.app_name,
@@ -88,4 +88,3 @@ def bsc_runs(limit: int = Query(default=50, ge=1, le=500)) -> list[dict]:
         return bsc_pipeline_service.get_recent_runs(limit=limit)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"bsc runs query failed: {exc}") from exc
-

@@ -22,4 +22,3 @@ def test_batch2_migration_contains_expected_tables_and_constraints() -> None:
 
     for constraint in expected_constraints:
         assert f'"{constraint}"' in content
-

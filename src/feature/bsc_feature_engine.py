@@ -32,4 +32,3 @@ class BscFeatureEngine:
                 )
             )
         return rows
-

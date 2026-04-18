@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from time import perf_counter
 
 from prometheus_client import Counter, Gauge, Histogram
-
 from src.feature.bsc_feature_engine import BscFeatureEngine
 from src.ingestion.bsc_source import BscIngestionSource
 from src.scoring.bsc_scoring_engine import BscScoringEngine
@@ -46,9 +45,13 @@ class BscPipelineService:
         force: bool = False,
         ts_minute: datetime | None = None,
     ) -> PipelineRunSummary:
-        run_ts = (ts_minute or datetime.now(tz=timezone.utc)).astimezone(timezone.utc).replace(
-            second=0,
-            microsecond=0,
+        run_ts = (
+            (ts_minute or datetime.now(tz=UTC))
+            .astimezone(UTC)
+            .replace(
+                second=0,
+                microsecond=0,
+            )
         )
         strategy_version = self.settings.bsc_strategy_version
 

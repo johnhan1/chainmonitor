@@ -4,11 +4,11 @@ Revision ID: b2c3d4e5f607
 Revises: a1b2c3d4e5f6
 Create Date: 2026-04-18 16:50:00.000000
 """
+
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "b2c3d4e5f607"

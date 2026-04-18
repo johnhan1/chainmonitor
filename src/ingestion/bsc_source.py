@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from hashlib import sha256
 
 from src.shared.config import get_settings
@@ -15,10 +15,12 @@ class BscIngestionSource:
 
     def fetch_market_ticks(self, ts_minute: datetime | None = None) -> list[MarketTickInput]:
         if ts_minute is None:
-            ts_minute = datetime.now(tz=timezone.utc).replace(second=0, microsecond=0)
+            ts_minute = datetime.now(tz=UTC).replace(second=0, microsecond=0)
         else:
-            ts_minute = ts_minute.astimezone(timezone.utc).replace(second=0, microsecond=0)
-        symbols = [s.strip().upper() for s in self.settings.bsc_default_symbols.split(",") if s.strip()]
+            ts_minute = ts_minute.astimezone(UTC).replace(second=0, microsecond=0)
+        symbols = [
+            s.strip().upper() for s in self.settings.bsc_default_symbols.split(",") if s.strip()
+        ]
         rows: list[MarketTickInput] = []
         for symbol in symbols:
             seed = self._seed(symbol=symbol, ts=ts_minute)
@@ -46,5 +48,5 @@ class BscIngestionSource:
 
     @staticmethod
     def _seed(symbol: str, ts: datetime) -> int:
-        digest = sha256(f"{symbol}:{ts.isoformat()}".encode("utf-8")).hexdigest()
+        digest = sha256(f"{symbol}:{ts.isoformat()}".encode()).hexdigest()
         return int(digest[:12], 16)

@@ -26,4 +26,3 @@ class EventEnvelope(BaseModel):
     token_id: str
     strategy_version: str
     payload: dict[str, Any] = Field(default_factory=dict)
-

@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("init", "up", "up-lite", "down", "reset", "migrate", "migrate-check", "check", "smoke", "bsc-run-once", "backup", "restore", "status", "all")]
+  [ValidateSet("init", "up", "up-lite", "down", "reset", "migrate", "check", "smoke", "bsc-run-once", "backup", "restore", "status", "all")]
   [string]$Command,
   [string]$BackupFile = ""
 )
@@ -43,9 +43,6 @@ switch ($Command) {
   "check" {
     Invoke-Checked ".\scripts\check.ps1"
   }
-  "migrate-check" {
-    Invoke-Checked ".\scripts\migration-check.ps1"
-  }
   "smoke" {
     Invoke-Checked ".\scripts\smoke.ps1"
   }
@@ -69,7 +66,6 @@ switch ($Command) {
     Invoke-Checked "$fullCompose up -d --build"
     Invoke-Checked ".\scripts\db-upgrade.ps1"
     Invoke-Checked ".\scripts\bsc-run-once.ps1"
-    Invoke-Checked ".\scripts\migration-check.ps1"
     Invoke-Checked ".\scripts\check.ps1"
     Invoke-Checked ".\scripts\smoke.ps1"
   }

@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.scoring.bsc_scoring_engine import BscScoringEngine
 from src.shared.schemas.pipeline import FeatureRowInput, MarketTickInput
 
 
 def test_bsc_scoring_engine_returns_expected_tier_range() -> None:
-    ts = datetime.now(tz=timezone.utc).replace(second=0, microsecond=0)
+    ts = datetime.now(tz=UTC).replace(second=0, microsecond=0)
     tick = MarketTickInput(
         chain_id="bsc",
         token_id="bsc_test",
