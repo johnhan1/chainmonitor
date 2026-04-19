@@ -52,6 +52,7 @@ class ScoreRowInput(BaseModel):
 
 
 class PipelineRunSummary(BaseModel):
+    run_id: str
     chain_id: str
     strategy_version: str
     ts_minute: datetime

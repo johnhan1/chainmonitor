@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.shared.schemas.pipeline import FeatureRowInput, MarketTickInput
 
 
-class BscFeatureEngine:
+class FeatureEngine:
     def build_features(self, ticks: list[MarketTickInput]) -> list[FeatureRowInput]:
         rows: list[FeatureRowInput] = []
         for tick in ticks:

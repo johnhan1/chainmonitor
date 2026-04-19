@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from src.scoring.bsc_scoring_engine import BscScoringEngine
+from src.scoring.scoring_engine import ScoringEngine
 from src.shared.schemas.pipeline import FeatureRowInput, MarketTickInput
 
 
@@ -34,7 +34,7 @@ def test_bsc_scoring_engine_returns_expected_tier_range() -> None:
         honeypot_flag=False,
     )
 
-    score = BscScoringEngine().score([tick], [feature])[0]
+    score = ScoringEngine(strategy_version="bsc-mvp-v1").score([tick], [feature])[0]
     assert 0 <= score.conviction <= 100
     assert score.tier in {"A", "B", "C"}
     assert "liquidity_ok" in score.reason_codes

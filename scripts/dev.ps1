@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("init", "up", "up-lite", "down", "reset", "migrate", "check", "smoke", "bsc-run-once", "backup", "restore", "status", "all")]
+  [ValidateSet("init", "up", "up-lite", "down", "reset", "migrate", "check", "smoke", "bsc-run-once", "backup", "restore", "status", "phase2-full-check", "all")]
   [string]$Command,
   [string]$BackupFile = ""
 )
@@ -60,6 +60,9 @@ switch ($Command) {
   }
   "status" {
     Invoke-Checked "$fullCompose ps"
+  }
+  "phase2-full-check" {
+    Invoke-Checked ".\scripts\phase2-full-check.ps1"
   }
   "all" {
     Invoke-Checked ".\scripts\setup.ps1"

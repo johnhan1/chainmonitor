@@ -1,3 +1,18 @@
+from src.shared.schemas.backtest import (
+    AttributionBucket,
+    AttributionReport,
+    BacktestConfig,
+    BacktestMetrics,
+    BacktestRunReport,
+    BacktestTradeResult,
+    BatchBacktestItem,
+    BatchBacktestJobReport,
+    CostBreakdown,
+    Gate2CheckResult,
+    ParameterSearchReport,
+    SearchCandidate,
+    WalkForwardReport,
+)
 from src.shared.schemas.pipeline import (
     FeatureRowInput,
     MarketTickInput,
@@ -6,8 +21,21 @@ from src.shared.schemas.pipeline import (
 )
 
 __all__ = [
+    "AttributionBucket",
+    "AttributionReport",
+    "BatchBacktestItem",
+    "BatchBacktestJobReport",
+    "BacktestConfig",
+    "BacktestMetrics",
+    "BacktestRunReport",
+    "BacktestTradeResult",
+    "CostBreakdown",
     "FeatureRowInput",
+    "Gate2CheckResult",
     "MarketTickInput",
+    "ParameterSearchReport",
     "PipelineRunSummary",
+    "SearchCandidate",
     "ScoreRowInput",
+    "WalkForwardReport",
 ]

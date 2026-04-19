@@ -13,9 +13,9 @@ services:
       CM_REDIS_URL: redis://redis:6379/0
       CM_CLICKHOUSE_HTTP_URL: http://localhost:8123
       CM_MINIO_ENDPOINT: http://localhost:9002
-      CM_BSC_SCHEDULER_ENABLED: "true"
-      CM_BSC_SCHEDULER_INTERVAL_SECONDS: "60"
-      CM_BSC_SCHEDULER_INITIAL_DELAY_SECONDS: "10"
+      CM_PIPELINE_SCHEDULER_ENABLED: "true"
+      CM_PIPELINE_SCHEDULER_INTERVAL_SECONDS: "60"
+      CM_PIPELINE_SCHEDULER_INITIAL_DELAY_SECONDS: "10"
     command: ["/opt/venv/bin/python", "-m", "uvicorn", "src.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "8000:8000"

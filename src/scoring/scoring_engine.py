@@ -4,8 +4,8 @@ from src.shared.config import get_settings
 from src.shared.schemas.pipeline import FeatureRowInput, MarketTickInput, ScoreRowInput
 
 
-class BscScoringEngine:
-    def __init__(self, strategy_version: str = "bsc-mvp-v1") -> None:
+class ScoringEngine:
+    def __init__(self, strategy_version: str = "") -> None:
         self.settings = get_settings()
         self.strategy_version = strategy_version
 
@@ -13,7 +13,11 @@ class BscScoringEngine:
         self,
         ticks: list[MarketTickInput],
         features: list[FeatureRowInput],
+        strategy_version: str | None = None,
     ) -> list[ScoreRowInput]:
+        resolved_strategy_version = strategy_version or self.strategy_version
+        if not resolved_strategy_version:
+            raise ValueError("strategy_version is required for scoring")
         feature_by_token = {f.token_id: f for f in features}
         rows: list[ScoreRowInput] = []
         for tick in ticks:
@@ -42,7 +46,7 @@ class BscScoringEngine:
             reason_codes = self._reason_codes(tick=tick, feature=feature, conviction=conviction)
             rows.append(
                 ScoreRowInput(
-                    strategy_version=self.strategy_version,
+                    strategy_version=resolved_strategy_version,
                     chain_id=tick.chain_id,
                     token_id=tick.token_id,
                     ts_minute=tick.ts_minute,

@@ -14,4 +14,4 @@ def test_metrics() -> None:
     response = client.get("/metrics")
     assert response.status_code == 200
     assert "cm_http_requests_total" in response.text
-    assert "cm_bsc_pipeline_runs_total" in response.text
+    assert "cm_pipeline_runs_total" in response.text

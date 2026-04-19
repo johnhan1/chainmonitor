@@ -45,7 +45,7 @@
 # 端到端 smoke
 .\scripts\dev.ps1 -Command smoke
 
-# BSC 主链路跑一次（采集->特征->评分->候选池）
+# 多链主链路跑一次（采集->特征->评分->候选池）
 .\scripts\dev.ps1 -Command bsc-run-once
 
 # 备份/恢复
@@ -61,10 +61,10 @@
 
 - App: `http://localhost:8000/healthz`
 - Metrics: `http://localhost:8000/metrics`
-- BSC Run Once API: `POST http://localhost:8000/pipeline/bsc/run-once`
-- BSC Replay API: `POST http://localhost:8000/pipeline/bsc/replay?ts_minute=2026-04-18T12:30:00Z`
-- BSC Candidates API: `GET http://localhost:8000/pipeline/bsc/candidates?tier=A&limit=20`
-- BSC Runs API: `GET http://localhost:8000/pipeline/bsc/runs?limit=50`
+- Chain Run Once API: `POST http://localhost:8000/pipeline/{chain_id}/run-once`
+- Chain Replay API: `POST http://localhost:8000/pipeline/{chain_id}/replay?ts_minute=2026-04-18T12:30:00Z`
+- Chain Candidates API: `GET http://localhost:8000/pipeline/{chain_id}/candidates?tier=A&limit=20`
+- Chain Runs API: `GET http://localhost:8000/pipeline/{chain_id}/runs?limit=50`
 - Prometheus: `http://localhost:9090`
 - Grafana: `http://localhost:3000`（`admin/admin`）
 - MinIO Console: `http://localhost:9001`
@@ -75,6 +75,8 @@
 - `b2c3d4e5f607_constraints_and_batch2_tables.py`（约束细化 + 第二批）
 - `c3d4e5f60718_batch3_tables.py`（第三批）
 - `d4e5f6071829_bsc_pipeline_runs.py`（BSC 调度运行状态表）
+- `e5f60718293a_rename_pipeline_runs_table.py`（通用多链 pipeline_runs 表）
+- `f60718293a4b_add_run_id_to_pipeline_runs.py`（pipeline_runs 新增 run_id）
 
 ## 目录结构
 

@@ -1,0 +1,375 @@
+# `src/ingestion` 目录详解与扩展指南
+
+本文档基于当前仓库实现（`d:\Code\chainmonitor\src\ingestion`）整理，目标是回答三件事：
+
+1. 这个目录整体是干什么的
+2. 每个子目录/文件分别负责什么
+3. 如何新增数据源、如何新增一条链（详细步骤）
+
+---
+
+## 1. `src/ingestion` 整体职责
+
+`ingestion` 是行情采集层（Market Data Ingestion Layer），负责：
+
+- 按链（`chain_id`）和时间窗口（`ts_minute`）采集行情数据
+- 将外部源数据统一转换为内部标准结构 `MarketTickInput`
+- 做数据源切换与兜底（Primary/Secondary + Fallback）
+- 做采集侧的韧性控制（限流、重试、熔断、缓存、质量门控）
+
+它不是“业务打分/策略决策层”，而是“可靠拿到标准化行情输入”的基础设施层。
+
+---
+
+## 2. 架构模式（先看全局）
+
+当前实现是典型的 **Strategy + Factory + Fallback + Service** 组合：
+
+- `contracts/`：定义采集策略接口与标准异常
+- `strategies/`：具体数据源实现（如 DexScreener、Mock）
+- `factory/`：根据配置装配主/备策略
+- `fallback/`：执行主备切换与结果补全
+- `services/`：对外统一入口
+- `resilience/`：通用韧性组件（令牌桶、熔断器）
+- `chain_ingestion_source_base.py`：所有策略共享的基础能力
+
+调用链路：
+
+`ChainIngestionService` -> `SourceStrategyFactory.create(...)` -> `FallbackSourceChain(primary, secondary)` -> `primary/secondary.fetch_market_ticks(...)`
+
+---
+
+## 3. 目录与文件逐个说明
+
+> 只列源码文件（忽略 `__pycache__`）
+
+### 3.1 根目录文件
+
+#### `src/ingestion/__init__.py`
+
+- 包导出文件（`__all__`）
+- 对外暴露采集层关键类：`ChainIngestionSourceBase`、`SourceStrategyFactory`、`FallbackSourceChain`、`ChainIngestionService`、`DexScreenerSourceStrategy`、`MockSourceStrategy`
+
+#### `src/ingestion/chain_ingestion_source_base.py`
+
+采集策略基类，提供所有策略共享的通用逻辑：
+
+- 初始化时校验 `chain_id` 是否在配置支持列表里
+- 解析链的 symbol 列表（`_symbols()`）
+- 统一 token_id 生成规则（`_token_id(symbol)` -> `"{chain}_{symbol}"`）
+- 统一分钟时间归一化（UTC，秒和微秒归零）
+- 稳定随机种子生成（供 Mock 数据复现）
+
+这是“策略代码避免重复”的公共底座。
+
+### 3.2 `contracts/`
+
+#### `src/ingestion/contracts/__init__.py`
+
+- 导出契约对象：`SourceStrategy`、`IngestionFetchError`
+
+#### `src/ingestion/contracts/source_strategy.py`
+
+- 定义策略抽象接口 `SourceStrategy`
+- 约束所有策略实现 `async fetch_market_ticks(ts_minute) -> list[MarketTickInput]`
+
+#### `src/ingestion/contracts/errors.py`
+
+- 定义采集层统一异常 `IngestionFetchError`
+- 包含结构化字段：`reason`、`detail`、`chain_id`、`trace_id`
+- 作用：让上层能按原因分类处理错误，而不只是字符串报错
+
+### 3.3 `factory/`
+
+#### `src/ingestion/factory/__init__.py`
+
+- 导出 `SourceStrategyFactory`
+
+#### `src/ingestion/factory/source_strategy_factory.py`
+
+工厂职责：
+
+- 内置策略注册表 `_registry`（当前有 `dexscreener`、`mock`）
+- 读取配置：
+  - `ingestion_primary_strategy`
+  - `ingestion_secondary_strategy`
+- 根据注册表构建主策略/备策略实例
+- 装配为 `FallbackSourceChain`
+- 启动时校验关键配置合法性：
+  - 主备策略名是否受支持
+  - 成功率阈值是否在 `[0,1]`
+  - 每条支持链的重试/并发/限流/熔断/成功率/最小币对年龄等参数可解析
+
+它是“配置驱动策略组装”的中心点。
+
+### 3.4 `fallback/`
+
+#### `src/ingestion/fallback/__init__.py`
+
+- 导出 `FallbackSourceChain`
+
+#### `src/ingestion/fallback/fallback_source_chain.py`
+
+主备编排器，核心逻辑：
+
+- `data_mode=mock`：直接走 secondary（通常是 Mock）
+- `data_mode=live`：直接走 primary（通常是 DexScreener）
+- `data_mode=hybrid`：
+  - 先拉 primary
+  - 如果全量覆盖直接返回
+  - 不足则拉 secondary 补缺
+  - 若补后仍缺 symbol，抛 `incomplete_fallback`
+  - 如果主备都失败，抛 `all_sources_failed`
+
+这个文件实现了“优先真实源 + 自动兜底补齐”的策略。
+
+### 3.5 `resilience/`
+
+#### `src/ingestion/resilience/__init__.py`
+
+- 导出 `AsyncTokenBucket`、`AsyncCircuitBreaker`
+
+#### `src/ingestion/resilience/controls.py`
+
+提供通用韧性组件：
+
+- `AsyncTokenBucket`：异步令牌桶，控制请求速率
+- `AsyncCircuitBreaker`：异步熔断器（closed/open/half_open）
+  - 达到失败阈值后打开熔断
+  - 恢复窗口后进入 half-open 探测
+  - 成功后恢复 closed
+
+这是网络不稳定场景下控制放大故障的关键基础件。
+
+### 3.6 `services/`
+
+#### `src/ingestion/services/__init__.py`
+
+- 导出 `ChainIngestionService`
+
+#### `src/ingestion/services/chain_ingestion_service.py`
+
+对外服务入口：
+
+- 构造时通过工厂创建策略链
+- 暴露简洁接口 `fetch_market_ticks()`
+- 上层调用方无需感知具体数据源、fallback、韧性细节
+
+### 3.7 `strategies/`
+
+#### `src/ingestion/strategies/__init__.py`
+
+- 导出 `DexScreenerSourceStrategy`、`MockSourceStrategy`
+
+#### `src/ingestion/strategies/dexscreener_source_strategy.py`
+
+真实行情采集策略（核心实现）：
+
+- 数据源：DexScreener HTTP API
+- 支持两种抓取路径：
+  - 按地址批量拉取（优先，`/latest/dex/tokens/{address,...}`）
+  - 按 symbol 搜索补齐（`/latest/dex/search?q=`）
+- 内建韧性机制：
+  - 限流（令牌桶）
+  - 重试+指数退避+jitter
+  - 熔断（open/half-open/closed）
+  - 进程内 TTL 缓存
+- 质量门控（pair 过滤）：
+  - 黑名单 DEX
+  - 路由关键字黑名单
+  - 币对最小年龄
+  - 异常换手率过滤（`volume_5m / liquidity`）
+- 可观测性：
+  - Prometheus Counter/Gauge/Histogram 多维指标
+  - 日志 trace_id
+- 输出：
+  - 统一构建 `MarketTickInput`，字段包括价格、成交量、流动性、买卖笔数等
+
+#### `src/ingestion/strategies/mock_source_strategy.py`
+
+模拟行情策略：
+
+- 不访问外网
+- 基于 `symbol + ts_minute` 生成稳定伪随机数据
+- 保证同一时间窗口可重复
+- 常用于本地开发、联调、fallback 兜底
+
+---
+
+## 4. 配置与 `ingestion` 的关系
+
+`ingestion` 高度依赖 `src/shared/config.py` 中 `Settings`，关键点：
+
+- 支持链集合由 `supported_chains` 给出
+- 每条链的 symbol 列表通过 `get_chain_symbols(chain_id)`
+- DexScreener 链映射通过 `get_dexscreener_chain_id(chain_id)`
+- 可选地址映射通过 `get_chain_token_addresses(chain_id)`
+- 主/备策略通过：
+  - `CM_INGESTION_PRIMARY_STRATEGY`
+  - `CM_INGESTION_SECONDARY_STRATEGY`
+- 韧性参数通过 `CM_MARKET_DATA_*` 及 `*_BY_CHAIN` 覆盖
+
+所以新增链或调整采集行为，绝大部分入口都在配置层。
+
+---
+
+## 5. 如何新增一个“数据源”（详细步骤）
+
+下面以新增 `FooSourceStrategy` 为例。
+
+### 步骤 1：新建策略文件
+
+在 `src/ingestion/strategies/` 新增文件 `foo_source_strategy.py`：
+
+- 类继承：`ChainIngestionSourceBase, SourceStrategy`
+- 必须实现：
+  - `async fetch_market_ticks(self, ts_minute=None) -> list[MarketTickInput]`
+- 输出必须是标准 `MarketTickInput` 列表（不要返回外部源原始 JSON）
+- 失败场景请抛 `IngestionFetchError`（带 `reason/detail/trace_id`）
+
+建议遵循现有约定：
+
+- 用 `self._symbols()` 作为目标 token 集
+- 用 `self._token_id(symbol)` 统一 token_id
+- 用 `self._normalize_ts(ts_minute)` 统一分钟粒度时间
+
+### 步骤 2：更新策略包导出
+
+修改 `src/ingestion/strategies/__init__.py`：
+
+- 导入 `FooSourceStrategy`
+- 加到 `__all__`
+
+### 步骤 3：注册到工厂
+
+修改 `src/ingestion/factory/source_strategy_factory.py`：
+
+- 导入 `FooSourceStrategy`
+- 在 `_registry` 中注册，比如：
+  - `"foo": FooSourceStrategy`
+
+只有注册后，`CM_INGESTION_PRIMARY_STRATEGY` / `CM_INGESTION_SECONDARY_STRATEGY` 才能使用它。
+
+### 步骤 4：配置启用
+
+在 `.env`（或对应环境文件）设置：
+
+- `CM_INGESTION_PRIMARY_STRATEGY=foo`
+- 或 `CM_INGESTION_SECONDARY_STRATEGY=foo`
+
+也可以先把它作为 secondary，在 `hybrid` 模式下灰度验证。
+
+### 步骤 5：验证
+
+最低建议验证项：
+
+- `live` 模式：能返回 `MarketTickInput`
+- `hybrid` 模式：当 primary 不全时能补齐
+- 异常链路：可抛结构化 `IngestionFetchError`
+- 指标与日志：是否有足够可观测信息（建议对齐 DexScreener 策略风格）
+
+---
+
+## 6. 如何新增一条链（详细步骤）
+
+这里的“新增链”指系统原生支持一个新 `chain_id`（例如 `arb`）。
+
+### 步骤 1：在 `Settings` 增加链基础字段
+
+修改 `src/shared/config.py`，新增类似字段：
+
+- `arb_chain_id: str = "arb"`
+- `arb_default_symbols: str = "..."`
+- `arb_strategy_version: str = "arb-mvp-v1"`
+- `arb_token_addresses: str = ""`
+
+并在 `supported_chains` 属性中加入 `self.arb_chain_id`。
+
+### 步骤 2：补全链映射函数
+
+在 `src/shared/config.py` 这些方法的 `mapping` 中新增 `arb`：
+
+- `get_chain_symbols`
+- `get_strategy_version`
+- `get_dexscreener_chain_id`
+- `get_chain_token_addresses`
+
+注意：
+
+- `get_dexscreener_chain_id` 必须填 DexScreener 实际识别的链标识（不是随便字符串）
+- 若 DexScreener 暂不支持该链，你需要：
+  - 新增可用数据源策略（见第 5 节），并
+  - 通过主备策略配置避开 DexScreener
+
+### 步骤 3：补充环境变量样例
+
+更新 `.env.example` 及各环境示例文件（如 `.env.dev.example`）：
+
+- `CM_ARB_CHAIN_ID=arb`
+- `CM_ARB_DEFAULT_SYMBOLS=...`
+- `CM_ARB_STRATEGY_VERSION=arb-mvp-v1`
+- `CM_ARB_TOKEN_ADDRESSES=SYMBOL=ADDRESS,...`
+
+如果调度器要跑这条链，还要把 `arb` 加入：
+
+- `CM_PIPELINE_SCHEDULER_CHAINS=...,arb`
+
+### 步骤 4：配置链级参数（可选但推荐）
+
+可按链覆盖采集参数，避免“一刀切”：
+
+- `CM_MARKET_DATA_RETRY_ATTEMPTS_BY_CHAIN=arb=...`
+- `CM_MARKET_DATA_MAX_CONCURRENCY_BY_CHAIN=arb=...`
+- `CM_MARKET_DATA_RATE_LIMIT_PER_SECOND_BY_CHAIN=arb=...`
+- `CM_MARKET_DATA_CIRCUIT_FAILURE_THRESHOLD_BY_CHAIN=arb=...`
+- `CM_MARKET_DATA_CIRCUIT_RECOVERY_SECONDS_BY_CHAIN=arb=...`
+- `CM_MARKET_DATA_MIN_SUCCESS_RATIO_BY_CHAIN=arb=...`
+- `CM_MARKET_DATA_MIN_PAIR_AGE_SECONDS_BY_CHAIN=arb=...`
+
+### 步骤 5：联调验证
+
+建议顺序：
+
+1. `mock` 模式先跑通（排除外部 API 因素）
+2. `live` 模式验证真实抓取
+3. `hybrid` 模式验证补齐逻辑
+4. 观察日志与 Prometheus 指标（成功率、重试、熔断、缺失映射）
+
+---
+
+## 7. 两类扩展的“最小修改面”总结
+
+### 新增数据源（不加新链）
+
+- 必改：
+  - `src/ingestion/strategies/<new>_source_strategy.py`（新增）
+  - `src/ingestion/strategies/__init__.py`
+  - `src/ingestion/factory/source_strategy_factory.py`
+- 常改：
+  - `.env*` 中 `CM_INGESTION_PRIMARY_STRATEGY` / `CM_INGESTION_SECONDARY_STRATEGY`
+
+### 新增链（可不加新数据源）
+
+- 必改：
+  - `src/shared/config.py`（字段 + supported_chains + 各 mapping）
+  - `.env*.example`（新增链相关变量）
+- 常改：
+  - `.env` 实际值（symbols、addresses、按链阈值）
+  - 调度链列表 `CM_PIPELINE_SCHEDULER_CHAINS`
+
+---
+
+## 8. 常见坑位
+
+- 只加了链字段，但忘了在 `supported_chains` 和映射函数里登记，会在运行时 KeyError/unsupported。
+- 新策略未注册到工厂 `_registry`，配置填了策略名也无法创建。
+- `CM_INGESTION_*_STRATEGY` 拼写和注册表 key 不一致。
+- 新链没有 token 地址映射时，DexScreener 仍可走 symbol 搜索，但覆盖率可能下降，触发 `insufficient_coverage`。
+- `CM_MARKET_DATA_MIN_SUCCESS_RATIO` 设得过高会导致 hybrid 频繁失败；建议按链单独调优。
+
+---
+
+## 9. 一句话结论
+
+`src/ingestion` 的核心价值是：**把多来源行情采集标准化、可兜底、可观测、可配置化**。
+扩展时遵循“策略实现放 `strategies`，装配注册放 `factory`，链支持放 `Settings` 映射”的原则即可稳定演进。
