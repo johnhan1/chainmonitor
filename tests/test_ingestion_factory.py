@@ -1,8 +1,9 @@
 import pytest
 from src.ingestion.factory.source_strategy_factory import SourceStrategyFactory
 from src.ingestion.fallback.fallback_source_chain import FallbackSourceChain
+from src.ingestion.strategies.birdeye_source_strategy import BirdeyeSourceStrategy
 from src.ingestion.strategies.dexscreener_source_strategy import DexScreenerSourceStrategy
-from src.ingestion.strategies.mock_source_strategy import MockSourceStrategy
+from src.ingestion.strategies.geckoterminal_source_strategy import GeckoTerminalSourceStrategy
 from src.shared.config import Settings, get_settings
 
 
@@ -25,44 +26,44 @@ def test_settings_parse_required_address_symbols() -> None:
     }
 
 
-def test_source_strategy_factory_uses_configured_primary_secondary(monkeypatch) -> None:
-    monkeypatch.setenv("CM_INGESTION_PRIMARY_STRATEGY", "mock")
-    monkeypatch.setenv("CM_INGESTION_SECONDARY_STRATEGY", "dexscreener")
+def test_settings_get_geckoterminal_network() -> None:
+    settings = Settings(market_data_geckoterminal_network_by_chain="bsc=bnb-smart-chain")
+    assert settings.get_geckoterminal_network("bsc") == "bnb-smart-chain"
+    assert settings.get_geckoterminal_network("eth") == "eth"
+
+
+def test_settings_get_birdeye_chain() -> None:
+    settings = Settings(market_data_birdeye_chain_by_chain="bsc=bsc-mainnet")
+    assert settings.get_birdeye_chain("bsc") == "bsc-mainnet"
+    assert settings.get_birdeye_chain("eth") == "ethereum"
+
+
+def test_source_strategy_factory_uses_configured_strategy_order(monkeypatch) -> None:
+    monkeypatch.setenv("CM_INGESTION_STRATEGY_ORDER", "dexscreener,geckoterminal,birdeye")
     get_settings.cache_clear()
-    strategy = SourceStrategyFactory.create(chain_id="bsc", data_mode="hybrid")
+    strategy = SourceStrategyFactory.create(chain_id="bsc")
     assert isinstance(strategy, FallbackSourceChain)
-    assert isinstance(strategy.primary, MockSourceStrategy)
-    assert isinstance(strategy.secondary, DexScreenerSourceStrategy)
+    assert len(strategy.sources) == 3
+    assert isinstance(strategy.sources[0], DexScreenerSourceStrategy)
+    assert isinstance(strategy.sources[1], GeckoTerminalSourceStrategy)
+    assert isinstance(strategy.sources[2], BirdeyeSourceStrategy)
+    get_settings.cache_clear()
+
+
+def test_source_strategy_factory_supports_geckoterminal(monkeypatch) -> None:
+    monkeypatch.setenv("CM_INGESTION_STRATEGY_ORDER", "geckoterminal,dexscreener,birdeye")
+    get_settings.cache_clear()
+    strategy = SourceStrategyFactory.create(chain_id="bsc")
+    assert isinstance(strategy, FallbackSourceChain)
+    assert isinstance(strategy.sources[0], GeckoTerminalSourceStrategy)
+    assert isinstance(strategy.sources[1], DexScreenerSourceStrategy)
+    assert isinstance(strategy.sources[2], BirdeyeSourceStrategy)
     get_settings.cache_clear()
 
 
 def test_source_strategy_factory_rejects_invalid_strategy(monkeypatch) -> None:
-    monkeypatch.setenv("CM_INGESTION_PRIMARY_STRATEGY", "unknown")
+    monkeypatch.setenv("CM_INGESTION_STRATEGY_ORDER", "unknown,dexscreener")
     get_settings.cache_clear()
     with pytest.raises(ValueError):
-        SourceStrategyFactory.create(chain_id="bsc", data_mode="hybrid")
-    get_settings.cache_clear()
-
-
-def test_source_strategy_factory_rejects_mock_in_production_hybrid(monkeypatch) -> None:
-    monkeypatch.setenv("CM_APP_ENV", "prod")
-    monkeypatch.setenv("CM_INGESTION_PRIMARY_STRATEGY", "dexscreener")
-    monkeypatch.setenv("CM_INGESTION_SECONDARY_STRATEGY", "mock")
-    get_settings.cache_clear()
-    with pytest.raises(ValueError, match="forbidden in production hybrid mode"):
-        SourceStrategyFactory.create(chain_id="bsc", data_mode="hybrid")
-    get_settings.cache_clear()
-
-
-def test_source_strategy_factory_allows_mock_in_production_when_explicitly_enabled(
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("CM_APP_ENV", "prod")
-    monkeypatch.setenv("CM_INGESTION_PRIMARY_STRATEGY", "dexscreener")
-    monkeypatch.setenv("CM_INGESTION_SECONDARY_STRATEGY", "mock")
-    monkeypatch.setenv("CM_INGESTION_ALLOW_MOCK_IN_PRODUCTION", "true")
-    get_settings.cache_clear()
-    strategy = SourceStrategyFactory.create(chain_id="bsc", data_mode="hybrid")
-    assert isinstance(strategy, FallbackSourceChain)
-    assert isinstance(strategy.secondary, MockSourceStrategy)
+        SourceStrategyFactory.create(chain_id="bsc")
     get_settings.cache_clear()

@@ -12,52 +12,42 @@ class FallbackSourceChain(ChainIngestionSourceBase, SourceStrategy):
     def __init__(
         self,
         chain_id: str,
-        primary: SourceStrategy,
-        secondary: SourceStrategy,
-        data_mode: str | None = None,
+        sources: list[SourceStrategy],
     ) -> None:
-        super().__init__(chain_id=chain_id, data_mode=data_mode)
-        self.primary = primary
-        self.secondary = secondary
+        super().__init__(chain_id=chain_id)
+        if not sources:
+            raise ValueError("fallback source chain requires at least one source strategy")
+        self.sources = sources
 
     async def fetch_market_ticks(self, ts_minute: datetime | None = None) -> list[MarketTickInput]:
-        if self.data_mode == "mock":
-            return await self.secondary.fetch_market_ticks(ts_minute=ts_minute)
-        if self.data_mode == "live":
-            return await self.primary.fetch_market_ticks(ts_minute=ts_minute)
-        if self.data_mode != "hybrid":
-            raise ValueError(f"unsupported market_data_mode: {self.data_mode}")
-
         target_ts = self._normalize_ts(ts_minute)
         symbols = self._symbols()
-        primary_error: IngestionFetchError | None = None
-        try:
-            live_rows = await self.primary.fetch_market_ticks(ts_minute=target_ts)
-        except IngestionFetchError as exc:
-            primary_error = exc
-            live_rows = []
-        if len(live_rows) == len(symbols):
-            return live_rows
-
-        by_token = {row.token_id: row for row in live_rows}
-        try:
-            fallback_rows = await self.secondary.fetch_market_ticks(ts_minute=target_ts)
-        except IngestionFetchError as exc:
-            detail = (
-                f"primary={primary_error.reason if primary_error else 'partial_live'};"
-                f" secondary={exc.reason}"
-            )
-            raise IngestionFetchError(
-                reason="all_sources_failed",
-                detail=detail,
-                chain_id=self.chain_id,
-                trace_id=exc.trace_id,
-            ) from exc
-        for row in fallback_rows:
-            by_token.setdefault(row.token_id, row)
+        by_token: dict[str, MarketTickInput] = {}
+        source_errors: list[str] = []
+        trace_id = "fallback-missing"
+        for index, source in enumerate(self.sources):
+            pending_symbols = [
+                symbol for symbol in symbols if self._token_id(symbol) not in by_token
+            ]
+            if not pending_symbols:
+                break
+            try:
+                source_rows = await source.fetch_market_ticks(ts_minute=target_ts)
+            except IngestionFetchError as exc:
+                source_errors.append(f"s{index + 1}:{exc.reason}")
+                trace_id = exc.trace_id
+                continue
+            for row in source_rows:
+                by_token.setdefault(row.token_id, row)
         missing_symbols = [symbol for symbol in symbols if self._token_id(symbol) not in by_token]
         if missing_symbols:
-            trace_id = primary_error.trace_id if primary_error else "fallback-missing"
+            if source_errors and len(by_token) == 0:
+                raise IngestionFetchError(
+                    reason="all_sources_failed",
+                    detail=";".join(source_errors),
+                    chain_id=self.chain_id,
+                    trace_id=trace_id,
+                )
             raise IngestionFetchError(
                 reason="incomplete_fallback",
                 detail=f"missing={','.join(missing_symbols)}",
@@ -67,5 +57,5 @@ class FallbackSourceChain(ChainIngestionSourceBase, SourceStrategy):
         return [by_token[self._token_id(symbol)] for symbol in symbols]
 
     async def aclose(self) -> None:
-        await self.primary.aclose()
-        await self.secondary.aclose()
+        for source in self.sources:
+            await source.aclose()

@@ -304,9 +304,17 @@ git --version
 CI（`.github/workflows/ci.yml`）执行顺序：
 
 1. 安装依赖
-2. Lint
-3. Test
-4. Smoke（启动 uvicorn 后请求 healthz/metrics）
+2. AI Review Repair Gate（执行 lint + test，并产出结构化报告）
+3. Smoke（启动 uvicorn 后请求 healthz/metrics）
+
+AI Review Repair Gate 入口脚本：`scripts/ci-ai-review-repair-gate.ps1`。
+该步骤会阻断失败门禁，并输出以下可观测产物：
+
+- `.artifacts/ai-review-repair/report.json`
+- `.artifacts/ai-review-repair/summary.md`
+- `trace_id`、`rounds`、`pass_rate`、`failure_reason_distribution`
+
+CI 会上传 artifact：`ai-review-repair-report`，用于审查追踪与复盘。
 
 ---
 
@@ -317,6 +325,7 @@ CI（`.github/workflows/ci.yml`）执行顺序：
 应用暴露 `/metrics`，当前示例指标：
 
 - `cm_http_requests_total`
+- CI 审查门禁报告中包含 `pass_rate` 与 `failure_reason_distribution`（离线产物）
 
 ### 13.2 Prometheus
 

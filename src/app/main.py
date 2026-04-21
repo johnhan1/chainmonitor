@@ -51,9 +51,8 @@ _PUBLIC_PATHS = {"/healthz", "/metrics", "/docs", "/redoc", "/openapi.json"}
 def _log_runtime_config_snapshot() -> None:
     for chain_id in settings.supported_chains:
         logger.info(
-            "runtime config chain_id=%s mode=%s scheduler_enabled=%s scheduler_interval=%s scheduler_jitter=%s retry=%s concurrency=%s rate=%.3f circuit_threshold=%s circuit_recovery=%.3f min_success_ratio=%.3f min_pair_age=%s",  # noqa: E501
+            "runtime config chain_id=%s scheduler_enabled=%s scheduler_interval=%s scheduler_jitter=%s retry=%s concurrency=%s rate=%.3f circuit_threshold=%s circuit_recovery=%.3f min_success_ratio=%.3f min_pair_age=%s",  # noqa: E501
             chain_id,
-            settings.market_data_mode,
             settings.pipeline_scheduler_enabled,
             settings.pipeline_scheduler_interval_seconds,
             settings.pipeline_scheduler_startup_jitter_seconds,

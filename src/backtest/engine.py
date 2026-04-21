@@ -5,11 +5,54 @@ from hashlib import sha256
 
 from src.backtest.cost_model import TradeCost, TradeCostModel
 from src.feature.feature_engine import FeatureEngine
-from src.ingestion.services.chain_ingestion_service import ChainIngestionService
 from src.scoring.scoring_engine import ScoringEngine
 from src.shared.config import get_settings
 from src.shared.schemas.backtest import BacktestConfig, BacktestMetrics, BacktestTradeResult
 from src.shared.schemas.pipeline import MarketTickInput
+
+
+class _BacktestSyntheticSource:
+    def __init__(self, chain_id: str, symbols: tuple[str, ...]) -> None:
+        self._chain_id = chain_id
+        self._symbols = symbols
+
+    async def fetch_market_ticks(self, ts_minute: datetime | None = None) -> list[MarketTickInput]:
+        target_ts = self._normalize_ts(ts_minute)
+        rows: list[MarketTickInput] = []
+        for symbol in self._symbols:
+            seed = self._seed(symbol=symbol, ts=target_ts)
+            price = 1 + (seed % 50_000) / 1_000
+            volume_1m = 5_000 + (seed % 80_000)
+            volume_5m = volume_1m * (1.1 + (seed % 30) / 100)
+            liquidity = 100_000 + (seed % 900_000)
+            buys = 20 + seed % 80
+            sells = 10 + seed % 60
+            rows.append(
+                MarketTickInput(
+                    chain_id=self._chain_id,
+                    token_id=f"{self._chain_id}_{symbol.lower()}",
+                    ts_minute=target_ts,
+                    price_usd=round(price, 6),
+                    volume_1m=float(volume_1m),
+                    volume_5m=float(volume_5m),
+                    liquidity_usd=float(liquidity),
+                    buys_1m=buys,
+                    sells_1m=sells,
+                    tx_count_1m=buys + sells + seed % 20,
+                )
+            )
+        return rows
+
+    @staticmethod
+    def _normalize_ts(ts_minute: datetime | None) -> datetime:
+        if ts_minute is None:
+            return datetime.now(tz=UTC).replace(second=0, microsecond=0)
+        return ts_minute.astimezone(UTC).replace(second=0, microsecond=0)
+
+    @staticmethod
+    def _seed(symbol: str, ts: datetime) -> int:
+        digest = sha256(f"{symbol}:{ts.isoformat()}".encode()).hexdigest()
+        return int(digest[:12], 16)
 
 
 class BacktestEngine:
@@ -19,7 +62,12 @@ class BacktestEngine:
             raise ValueError(f"unsupported chain_id: {chain_id}")
         self.settings = settings
         self.chain_id = chain_id
-        self.source = ChainIngestionService(chain_id=chain_id, data_mode="mock")
+        symbols = tuple(
+            symbol.strip().upper()
+            for symbol in self.settings.get_chain_symbols(chain_id).split(",")
+            if symbol.strip()
+        )
+        self.source = _BacktestSyntheticSource(chain_id=chain_id, symbols=symbols)
         self.feature_engine = FeatureEngine()
         self.scoring_engine = ScoringEngine(
             strategy_version=self.settings.get_strategy_version(chain_id=chain_id)

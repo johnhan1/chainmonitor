@@ -1,0 +1,14 @@
+- [x] 对外入口仍为 `ChainIngestionService`，调用方式不变
+- [x] `SourceStrategyFactory` 能创建并注册双实时数据源策略
+- [x] `FallbackSourceChain` 在 `live/mock/hybrid` 三种模式行为正确
+- [x] 新增统一 `ProviderAdapter` 契约并被各实时源实现
+- [x] 新增 `BaseLiveSourceStrategy`，实时源不再复制主流程
+- [x] 新增统一 `ResilientHttpClient`，复用 `AsyncTokenBucket` 与 `AsyncCircuitBreaker`
+- [x] `DexScreenerSourceStrategy` 已重构为薄封装，旧重复逻辑已删除
+- [x] 第二实时数据源已接入且可产出 `MarketTickInput`
+- [x] 质量门禁逻辑已提炼为独立策略并复用
+- [x] 异常语义保持结构化（`reason/detail/chain_id/trace_id`）
+- [x] 新增配置全部进入 `Settings` 且使用 `CM_` 前缀
+- [x] 新增或更新测试覆盖成功、失败与 fallback 补齐路径
+- [x] `INGESTION_ARCHITECTURE_GUIDE.md` 已同步更新到新架构
+- [x] 通过静态检查与测试，无新增阻断性问题

@@ -43,7 +43,6 @@ class Settings(BaseSettings):
     base_strategy_version: str = "base-mvp-v1"
     eth_strategy_version: str = "eth-mvp-v1"
     sol_strategy_version: str = "sol-mvp-v1"
-    market_data_mode: str = "hybrid"
     market_data_timeout_seconds: float = 3.0
     market_data_retry_attempts: int = 3
     market_data_retry_base_seconds: float = 0.3
@@ -74,9 +73,12 @@ class Settings(BaseSettings):
     market_data_require_address_mapping_in_production: bool = True
     market_data_dex_blacklist_ids: str = ""
     market_data_route_blacklist_keywords: str = ""
-    ingestion_primary_strategy: str = "dexscreener"
-    ingestion_secondary_strategy: str = "mock"
-    ingestion_allow_mock_in_production: bool = False
+    market_data_geckoterminal_api_base: str = "https://api.geckoterminal.com/api/v2"
+    market_data_geckoterminal_network_by_chain: str = ""
+    market_data_birdeye_api_base: str = "https://public-api.birdeye.so/defi"
+    market_data_birdeye_api_key: str = ""
+    market_data_birdeye_chain_by_chain: str = ""
+    ingestion_strategy_order: str = "dexscreener,geckoterminal,birdeye"
     bsc_token_addresses: str = ""
     base_token_addresses: str = ""
     eth_token_addresses: str = ""
@@ -168,6 +170,43 @@ class Settings(BaseSettings):
             if symbol and address:
                 parsed[symbol] = address
         return parsed
+
+    def get_geckoterminal_network(self, chain_id: str) -> str:
+        parsed = self._parse_chain_override(
+            overrides=self.market_data_geckoterminal_network_by_chain
+        )
+        override = parsed.get(chain_id)
+        if override:
+            return override
+        mapping = {
+            self.bsc_chain_id: "bsc",
+            self.base_chain_id: "base",
+            self.eth_chain_id: "eth",
+            self.sol_chain_id: "solana",
+        }
+        return mapping[chain_id]
+
+    def get_birdeye_chain(self, chain_id: str) -> str:
+        parsed = self._parse_chain_override(overrides=self.market_data_birdeye_chain_by_chain)
+        override = parsed.get(chain_id)
+        if override:
+            return override
+        mapping = {
+            self.bsc_chain_id: "bsc",
+            self.base_chain_id: "base",
+            self.eth_chain_id: "ethereum",
+            self.sol_chain_id: "solana",
+        }
+        return mapping[chain_id]
+
+    @property
+    def enabled_ingestion_strategies(self) -> tuple[str, ...]:
+        raw = self.ingestion_strategy_order.strip().lower()
+        if not raw:
+            return ()
+        requested = [item.strip() for item in raw.split(",") if item.strip()]
+        deduped = dict.fromkeys(requested)
+        return tuple(deduped.keys())
 
     def get_market_data_retry_attempts(self, chain_id: str) -> int:
         return self._chain_int_override(

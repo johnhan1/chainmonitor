@@ -401,9 +401,17 @@ CI 文件：`.github/workflows/ci.yml`
 步骤：
 
 1. 创建 `.venv` 并安装依赖
-2. ruff
-3. pytest
-4. 启动 uvicorn 做 smoke（healthz + metrics）
+2. 执行 `scripts/ci-ai-review-repair-gate.ps1`（lint + pytest + 门禁判定）
+3. 启动 uvicorn 做 smoke（healthz + metrics）
+4. 上传 `ai-review-repair-report` artifact（报告 + 摘要）
+
+AI Review Repair Gate 输出：
+
+- `trace_id`：单次审查唯一追踪 ID
+- `rounds`：当前 CI 固定为 1 轮审查执行
+- `pass_rate`：当前轮硬门禁通过率
+- `failure_reason_distribution`：按门禁名称聚合的失败原因分布
+- `checks[*].evidence`：每个门禁的失败证据片段（末 20 行）
 
 ### 8.2 为什么先迁移再测试
 
@@ -418,6 +426,7 @@ CI 文件：`.github/workflows/ci.yml`
 
 - 已有最小告警与看板
 - 指标量级还不够全面（当前偏基础）
+- CI 审查链路已输出结构化报告，可用于 PR 追溯与失败归因
 
 ### 9.2 下一步建议（可选增强）
 

@@ -7,7 +7,7 @@
 - 开发运行时：Python `3.11/3.12` + 本地 `.venv`（禁止全局 `pip install`）
 - 容器底座：`app`、`PostgreSQL`、`ClickHouse`、`Redis`、`MinIO`、`Prometheus`、`Grafana`
 - 数据迁移：Alembic 多批次迁移（核心表 + 约束 + 批次扩展）
-- 工程质量：`ruff`、`pytest`、`pre-commit`、CI smoke
+- 工程质量：`ruff`、`pytest`、`pre-commit`、AI Review Repair CI 门禁 + smoke
 - 可观测性：`/metrics`、Prometheus 抓取、Grafana 预置 dashboard、Prometheus 告警规则
 - 运维脚手架：统一命令入口、数据库备份恢复、full/lite 两套 compose
 
@@ -56,6 +56,17 @@
 .\scripts\dev.ps1 -Command down
 .\scripts\dev.ps1 -Command reset
 ```
+
+## CI 入口与可观测输出
+
+- 入口脚本：`scripts/ci-ai-review-repair-gate.ps1`
+- 执行位置：GitHub Actions `ci` 工作流中的 `AI Review Repair Gate` 步骤
+- 门禁行为：脚本按顺序执行 `lint` 与 `test`，任一失败即阻断 CI
+- 可观测输出：
+  - 结构化报告：`.artifacts/ai-review-repair/report.json`
+  - 汇总摘要：`.artifacts/ai-review-repair/summary.md`
+  - 关键字段：`trace_id`、`rounds`、`pass_rate`、`failure_reason_distribution`
+- 产物留存：CI 会上传 `ai-review-repair-report` artifact 便于追溯
 
 ## 访问地址
 
@@ -119,4 +130,4 @@ src/
 - 本地 `.\scripts\dev.ps1 -Command all` 可一次通过
 - `docker compose -f deploy\docker-compose.yml ps` 全部核心服务健康
 - `healthz/metrics/prometheus/grafana` 可访问
-- CI 包含 `lint -> tests -> smoke` 全链路
+- CI 包含 `AI Review Repair Gate(lint+tests+指标输出) -> smoke` 全链路

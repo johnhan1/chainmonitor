@@ -23,15 +23,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements/dev.txt
 
-      - name: Lint
+      - name: AI Review Repair Gate
+        id: ai_review_gate
+        shell: pwsh
         run: |
-          . .venv/bin/activate
-          python -m ruff check src tests
-
-      - name: Test
-        run: |
-          . .venv/bin/activate
-          python -m pytest -q
+          ./scripts/ci-ai-review-repair-gate.ps1 `
+            -ReportPath ".artifacts/ai-review-repair/report.json" `
+            -SummaryPath ".artifacts/ai-review-repair/summary.md"
 
       - name: Smoke Check
         run: |
@@ -42,3 +40,12 @@ jobs:
           curl --fail http://127.0.0.1:8000/healthz
           curl --fail http://127.0.0.1:8000/metrics
           kill $APP_PID
+
+      - name: Upload AI Review Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-review-repair-report
+          path: |
+            .artifacts/ai-review-repair/report.json
+            .artifacts/ai-review-repair/summary.md

@@ -7,12 +7,11 @@ from src.shared.config import Settings, get_settings
 
 
 class ChainIngestionSourceBase:
-    def __init__(self, chain_id: str, data_mode: str | None = None) -> None:
+    def __init__(self, chain_id: str) -> None:
         self.settings: Settings = get_settings()
         if chain_id not in self.settings.supported_chains:
             raise ValueError(f"unsupported chain_id: {chain_id}")
         self.chain_id = chain_id
-        self.data_mode = (data_mode or self.settings.market_data_mode).strip().lower()
 
     def _symbols(self) -> list[str]:
         raw = self.settings.get_chain_symbols(self.chain_id)

@@ -26,7 +26,7 @@
 当前实现是典型的 **Strategy + Factory + Fallback + Service** 组合：
 
 - `contracts/`：定义采集策略接口与标准异常
-- `strategies/`：具体数据源实现（如 DexScreener、Mock）
+- `strategies/`：具体数据源实现（如 DexScreener、GeckoTerminal、Birdeye）
 - `factory/`：根据配置装配主/备策略
 - `fallback/`：执行主备切换与结果补全
 - `services/`：对外统一入口
@@ -35,7 +35,7 @@
 
 调用链路：
 
-`ChainIngestionService` -> `SourceStrategyFactory.create(...)` -> `FallbackSourceChain(primary, secondary)` -> `primary/secondary.fetch_market_ticks(...)`
+`ChainIngestionService` -> `SourceStrategyFactory.create(...)` -> `FallbackSourceChain(sources=[s1,s2,s3])` -> `按顺序补齐缺失 token`
 
 ---
 
@@ -48,7 +48,7 @@
 #### `src/ingestion/__init__.py`
 
 - 包导出文件（`__all__`）
-- 对外暴露采集层关键类：`ChainIngestionSourceBase`、`SourceStrategyFactory`、`FallbackSourceChain`、`ChainIngestionService`、`DexScreenerSourceStrategy`、`MockSourceStrategy`
+- 对外暴露采集层关键类：`ChainIngestionSourceBase`、`SourceStrategyFactory`、`FallbackSourceChain`、`ChainIngestionService`、`DexScreenerSourceStrategy`、`GeckoTerminalSourceStrategy`、`BirdeyeSourceStrategy`
 
 #### `src/ingestion/chain_ingestion_source_base.py`
 
@@ -58,7 +58,7 @@
 - 解析链的 symbol 列表（`_symbols()`）
 - 统一 token_id 生成规则（`_token_id(symbol)` -> `"{chain}_{symbol}"`）
 - 统一分钟时间归一化（UTC，秒和微秒归零）
-- 稳定随机种子生成（供 Mock 数据复现）
+- 稳定随机种子生成（供一致性哈希与测试场景复用）
 
 这是“策略代码避免重复”的公共底座。
 
@@ -66,7 +66,7 @@
 
 #### `src/ingestion/contracts/__init__.py`
 
-- 导出契约对象：`SourceStrategy`、`IngestionFetchError`
+- 导出契约对象：`SourceStrategy`、`IngestionFetchError`、`ProviderAdapter`、`NormalizedPair`、`PairQualityPolicy`
 
 #### `src/ingestion/contracts/source_strategy.py`
 
@@ -79,6 +79,26 @@
 - 包含结构化字段：`reason`、`detail`、`chain_id`、`trace_id`
 - 作用：让上层能按原因分类处理错误，而不只是字符串报错
 
+#### `src/ingestion/contracts/provider_adapter.py`
+
+- 定义统一上游适配器契约 `ProviderAdapter`
+- 约束实时源适配器提供两类能力：
+  - `fetch_pairs_by_addresses(...)`
+  - `fetch_pair_by_symbol(...)`
+- 作用：把“上游接口差异”封装在 adapter 层，模板策略无需感知源差异
+
+#### `src/ingestion/contracts/normalized_pair.py`
+
+- 定义跨数据源统一中间模型 `NormalizedPair`
+- 承载统一字段（symbol、价格、成交量、流动性、买卖笔数、pair 元数据）
+- 作用：实时源先归一，再走统一质量门禁与 `MarketTickInput` 转换
+
+#### `src/ingestion/contracts/pair_quality_policy.py`
+
+- 定义质量门禁契约 `PairQualityPolicy`
+- 提供默认实现 `DefaultPairQualityPolicy`，覆盖黑名单、最小年龄、换手率等规则
+- 作用：质量过滤逻辑独立化，便于多源复用与替换
+
 ### 3.3 `factory/`
 
 #### `src/ingestion/factory/__init__.py`
@@ -89,11 +109,10 @@
 
 工厂职责：
 
-- 内置策略注册表 `_registry`（当前有 `dexscreener`、`mock`）
+- 内置策略注册表 `_registry`（当前有 `dexscreener`、`geckoterminal`、`birdeye`）
 - 读取配置：
-  - `ingestion_primary_strategy`
-  - `ingestion_secondary_strategy`
-- 根据注册表构建主策略/备策略实例
+  - `ingestion_strategy_order`
+- 根据注册表按顺序构建策略实例列表
 - 装配为 `FallbackSourceChain`
 - 启动时校验关键配置合法性：
   - 主备策略名是否受支持
@@ -112,14 +131,11 @@
 
 主备编排器，核心逻辑：
 
-- `data_mode=mock`：直接走 secondary（通常是 Mock）
-- `data_mode=live`：直接走 primary（通常是 DexScreener）
-- `data_mode=hybrid`：
-  - 先拉 primary
-  - 如果全量覆盖直接返回
-  - 不足则拉 secondary 补缺
+- `data_mode=live` 或 `data_mode=hybrid`：
+  - 依次尝试 `sources`（例如 DexScreener -> GeckoTerminal -> Birdeye）
+  - 每一层只补齐上一层缺失 token
   - 若补后仍缺 symbol，抛 `incomplete_fallback`
-  - 如果主备都失败，抛 `all_sources_failed`
+  - 若所有来源都失败且无有效数据，抛 `all_sources_failed`
 
 这个文件实现了“优先真实源 + 自动兜底补齐”的策略。
 
@@ -127,7 +143,7 @@
 
 #### `src/ingestion/resilience/__init__.py`
 
-- 导出 `AsyncTokenBucket`、`AsyncCircuitBreaker`
+- 导出 `AsyncTokenBucket`、`AsyncCircuitBreaker`、`ResilientHttpClient`
 
 #### `src/ingestion/resilience/controls.py`
 
@@ -140,6 +156,12 @@
   - 成功后恢复 closed
 
 这是网络不稳定场景下控制放大故障的关键基础件。
+
+#### `src/ingestion/resilience/resilient_http_client.py`
+
+- 提供统一 HTTP 韧性客户端 `ResilientHttpClient`
+- 内聚重试、指数退避、熔断、限流、进程内缓存、Redis 缓存、singleflight
+- 对 adapter 暴露统一 `get_json(...)` 接口，避免策略层重复实现请求逻辑
 
 ### 3.6 `services/`
 
@@ -159,40 +181,52 @@
 
 #### `src/ingestion/strategies/__init__.py`
 
-- 导出 `DexScreenerSourceStrategy`、`MockSourceStrategy`
+- 导出 `BaseLiveSourceStrategy`、`DexScreenerSourceStrategy`、`GeckoTerminalSourceStrategy`、`BirdeyeSourceStrategy`
+
+#### `src/ingestion/strategies/base_live_source_strategy.py`
+
+- 定义实时源模板基类 `BaseLiveSourceStrategy`
+- 固化统一流程：采集 -> 质量过滤 -> 转换 `MarketTickInput`
+- 依赖注入 `ProviderAdapter` 与 `PairQualityPolicy`，减少新实时源重复代码
 
 #### `src/ingestion/strategies/dexscreener_source_strategy.py`
 
-真实行情采集策略（核心实现）：
+真实行情采集薄策略（编排层）：
 
 - 数据源：DexScreener HTTP API
-- 支持两种抓取路径：
-  - 按地址批量拉取（优先，`/latest/dex/tokens/{address,...}`）
-  - 按 symbol 搜索补齐（`/latest/dex/search?q=`）
-- 内建韧性机制：
-  - 限流（令牌桶）
-  - 重试+指数退避+jitter
-  - 熔断（open/half-open/closed）
-  - 进程内 TTL 缓存
-- 质量门控（pair 过滤）：
-  - 黑名单 DEX
-  - 路由关键字黑名单
-  - 币对最小年龄
-  - 异常换手率过滤（`volume_5m / liquidity`）
-- 可观测性：
-  - Prometheus Counter/Gauge/Histogram 多维指标
-  - 日志 trace_id
-- 输出：
-  - 统一构建 `MarketTickInput`，字段包括价格、成交量、流动性、买卖笔数等
+- 负责主流程编排：required mapping 校验、地址优先抓取、symbol 补齐、覆盖率校验
+- 通过 `BaseLiveSourceStrategy` 统一质量门控与 `MarketTickInput` 构建
+- 仅保留策略级可观测性（覆盖率、必需映射缺失），不再直接实现 HTTP 重试/缓存细节
 
-#### `src/ingestion/strategies/mock_source_strategy.py`
+#### `src/ingestion/adapters/dexscreener_provider_adapter.py`
 
-模拟行情策略：
+- 实现 `ProviderAdapter`，封装 DexScreener 端点协议与 payload 解析
+- 支持两类请求：
+  - 地址批量：`/latest/dex/tokens/{address,...}`
+  - symbol 搜索：`/latest/dex/search?q=`
+- 依赖 `ResilientHttpClient` 执行请求，输出统一 `NormalizedPair`
 
-- 不访问外网
-- 基于 `symbol + ts_minute` 生成稳定伪随机数据
-- 保证同一时间窗口可重复
-- 常用于本地开发、联调、fallback 兜底
+#### `src/ingestion/adapters/geckoterminal_provider_adapter.py`
+
+- 实现 `ProviderAdapter`，封装 GeckoTerminal v2 API 的端点调用与字段映射
+- 支持两类请求：
+  - 地址拉取：`/networks/{network}/tokens/{address}/pools`
+  - symbol 搜索：`/search/pools?query=...&network=...`
+- 输出统一 `NormalizedPair`，与 DexScreener 共用模板策略与质量门禁
+
+#### `src/ingestion/strategies/geckoterminal_source_strategy.py`
+
+- 真实行情采集薄策略（编排层）
+- 复用 `BaseLiveSourceStrategy` 的统一转换与过滤逻辑
+- 承担 GeckoTerminal 特有的 required mapping、覆盖率、必需 symbol 校验
+
+#### `src/ingestion/strategies/birdeye_source_strategy.py`
+
+兜底实时源策略（第三层）：
+
+- 通过 Birdeye 免费 API 获取 token 行情数据
+- 在 DexScreener / GeckoTerminal 覆盖不足时补齐
+- 复用统一模板流程、质量门禁和韧性请求层
 
 ---
 
@@ -203,10 +237,10 @@
 - 支持链集合由 `supported_chains` 给出
 - 每条链的 symbol 列表通过 `get_chain_symbols(chain_id)`
 - DexScreener 链映射通过 `get_dexscreener_chain_id(chain_id)`
+- GeckoTerminal 网络映射通过 `get_geckoterminal_network(chain_id)`
 - 可选地址映射通过 `get_chain_token_addresses(chain_id)`
-- 主/备策略通过：
-  - `CM_INGESTION_PRIMARY_STRATEGY`
-  - `CM_INGESTION_SECONDARY_STRATEGY`
+- 数据源顺序通过：
+  - `CM_INGESTION_STRATEGY_ORDER`（例如 `dexscreener,geckoterminal,birdeye`）
 - 韧性参数通过 `CM_MARKET_DATA_*` 及 `*_BY_CHAIN` 覆盖
 
 所以新增链或调整采集行为，绝大部分入口都在配置层。
@@ -248,23 +282,22 @@
 - 在 `_registry` 中注册，比如：
   - `"foo": FooSourceStrategy`
 
-只有注册后，`CM_INGESTION_PRIMARY_STRATEGY` / `CM_INGESTION_SECONDARY_STRATEGY` 才能使用它。
+只有注册后，`CM_INGESTION_STRATEGY_ORDER` 才能使用它。
 
 ### 步骤 4：配置启用
 
 在 `.env`（或对应环境文件）设置：
 
-- `CM_INGESTION_PRIMARY_STRATEGY=foo`
-- 或 `CM_INGESTION_SECONDARY_STRATEGY=foo`
+- `CM_INGESTION_STRATEGY_ORDER=dexscreener,geckoterminal,foo`
 
-也可以先把它作为 secondary，在 `hybrid` 模式下灰度验证。
+也可以先把它放在末位作为兜底源灰度验证。
 
 ### 步骤 5：验证
 
 最低建议验证项：
 
 - `live` 模式：能返回 `MarketTickInput`
-- `hybrid` 模式：当 primary 不全时能补齐
+- `hybrid/live` 模式：当前层不全时下一层能补齐
 - 异常链路：可抛结构化 `IngestionFetchError`
 - 指标与日志：是否有足够可观测信息（建议对齐 DexScreener 策略风格）
 
@@ -330,10 +363,9 @@
 
 建议顺序：
 
-1. `mock` 模式先跑通（排除外部 API 因素）
-2. `live` 模式验证真实抓取
-3. `hybrid` 模式验证补齐逻辑
-4. 观察日志与 Prometheus 指标（成功率、重试、熔断、缺失映射）
+1. `live` 模式验证一级源抓取
+2. 验证二级、三级兜底补齐逻辑
+3. 观察日志与 Prometheus 指标（成功率、重试、熔断、缺失映射）
 
 ---
 
@@ -346,7 +378,7 @@
   - `src/ingestion/strategies/__init__.py`
   - `src/ingestion/factory/source_strategy_factory.py`
 - 常改：
-  - `.env*` 中 `CM_INGESTION_PRIMARY_STRATEGY` / `CM_INGESTION_SECONDARY_STRATEGY`
+  - `.env*` 中 `CM_INGESTION_STRATEGY_ORDER`
 
 ### 新增链（可不加新数据源）
 
@@ -363,9 +395,9 @@
 
 - 只加了链字段，但忘了在 `supported_chains` 和映射函数里登记，会在运行时 KeyError/unsupported。
 - 新策略未注册到工厂 `_registry`，配置填了策略名也无法创建。
-- `CM_INGESTION_*_STRATEGY` 拼写和注册表 key 不一致。
+- `CM_INGESTION_STRATEGY_ORDER` 中的策略名与注册表 key 不一致。
 - 新链没有 token 地址映射时，DexScreener 仍可走 symbol 搜索，但覆盖率可能下降，触发 `insufficient_coverage`。
-- `CM_MARKET_DATA_MIN_SUCCESS_RATIO` 设得过高会导致 hybrid 频繁失败；建议按链单独调优。
+- `CM_MARKET_DATA_MIN_SUCCESS_RATIO` 设得过高会导致多源补齐后仍判定失败；建议按链单独调优。
 
 ---
 

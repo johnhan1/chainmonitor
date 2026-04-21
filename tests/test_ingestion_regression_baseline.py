@@ -1,39 +1,51 @@
 import asyncio
 from datetime import UTC, datetime
 
+from src.ingestion.contracts.normalized_pair import NormalizedPair
 from src.ingestion.strategies.dexscreener_source_strategy import DexScreenerSourceStrategy
 
 
 def test_dexscreener_tick_mapping_regression_baseline(monkeypatch) -> None:
-    strategy = DexScreenerSourceStrategy(chain_id="bsc", data_mode="live")
+    strategy = DexScreenerSourceStrategy(chain_id="bsc")
     strategy.settings.market_data_require_address_mapping_in_production = False
     strategy.settings.market_data_required_address_symbols_by_chain = ""
     ts = datetime(2026, 4, 18, 12, 30, 33, 456789, tzinfo=UTC)
     monkeypatch.setattr(strategy, "_symbols", lambda: ["BNB"], raising=True)
 
-    pair = {
-        "chainId": "bsc",
-        "baseToken": {"symbol": "BNB", "address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"},
-        "priceUsd": "602.123",
-        "volume": {"m5": "125000"},
-        "liquidity": {"usd": "2500000"},
-        "txns": {"m5": {"buys": 200, "sells": 120}},
-        "pairCreatedAt": 1700000000000,
-        "dexId": "pancakeswap",
-        "pairAddress": "0xpair",
-        "url": "https://dexscreener.com/bsc/pair",
-    }
+    pair = NormalizedPair(
+        chain_id="bsc",
+        symbol="BNB",
+        source="dexscreener",
+        price_usd=602.123,
+        volume_5m=125000.0,
+        liquidity_usd=2500000.0,
+        buys_5m=200,
+        sells_5m=120,
+        pair_created_at_ms=1700000000000,
+        dex_id="pancakeswap",
+        pair_address="0xpair",
+        url="https://dexscreener.com/bsc/pair",
+        base_token_address="0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+    )
 
     async def fake_fetch_by_addresses(*args, **kwargs):  # noqa: ANN002, ANN003
         return {}
 
     async def fake_fetch_by_symbol(*args, **kwargs):  # noqa: ANN002, ANN003
-        return "BNB", pair
+        return pair
 
     monkeypatch.setattr(
-        strategy, "_fetch_pairs_by_addresses", fake_fetch_by_addresses, raising=True
+        strategy._adapter,
+        "fetch_pairs_by_addresses",
+        fake_fetch_by_addresses,
+        raising=True,  # noqa: SLF001
     )
-    monkeypatch.setattr(strategy, "_fetch_pair_by_symbol", fake_fetch_by_symbol, raising=True)
+    monkeypatch.setattr(
+        strategy._adapter,
+        "fetch_pair_by_symbol",
+        fake_fetch_by_symbol,
+        raising=True,  # noqa: SLF001
+    )
 
     rows = asyncio.run(strategy.fetch_market_ticks(ts_minute=ts))
     assert len(rows) == 1
