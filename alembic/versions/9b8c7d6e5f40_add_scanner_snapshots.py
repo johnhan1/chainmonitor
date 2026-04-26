@@ -31,8 +31,10 @@ def upgrade() -> None:
     op.create_unique_constraint(
         "uq_scanner_snapshots_chain_interval", "scanner_snapshots", ["chain", "interval"]
     )
+    op.create_index("ix_scanner_snapshots_taken_at", "scanner_snapshots", ["taken_at"])
 
 
 def downgrade() -> None:
+    op.drop_index("ix_scanner_snapshots_taken_at")
     op.drop_constraint("uq_scanner_snapshots_chain_interval", "scanner_snapshots")
     op.drop_table("scanner_snapshots")

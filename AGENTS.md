@@ -1,6 +1,6 @@
 # ChainMonitor — Agent Guide
 
-> ⚠️ 行为约束规则请参阅 `.trae/rules/RULES.md`（P0 规则每轮必须遵守）。
+> ⚠️ Behavioral rules at `.trae/rules/RULES.md`. P0 rules are enforced per-turn.
 
 ## Quick start
 

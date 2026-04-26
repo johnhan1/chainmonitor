@@ -112,19 +112,19 @@ class Settings(BaseSettings):
     pipeline_scheduler_catchup_windows: int = 3
 
     # GMGN
-    cm_gmgn_api_key: str = ""
-    cm_gmgn_cli_path: str = "gmgn-cli"
+    gmgn_api_key: str = ""
+    gmgn_cli_path: str = "gmgn-cli"
     # Telegram
-    cm_telegram_bot_token: str = ""
-    cm_telegram_chat_id: str = ""
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
     # Scanner
-    cm_scanner_enabled: bool = False
-    cm_scanner_chains: list[str] = ["sol", "bsc", "base", "eth"]
-    cm_scanner_surge_threshold: int = 10
-    cm_scanner_spike_ratio: float = 2.0
-    cm_scanner_interval_1m_seconds: int = 60
-    cm_scanner_interval_1h_seconds: int = 300
-    cm_scanner_trending_limit: int = 50
+    scanner_enabled: bool = False
+    scanner_chains_raw: str = "sol,bsc,base,eth"
+    scanner_surge_threshold: int = 10
+    scanner_spike_ratio: float = 2.0
+    scanner_interval_1m_seconds: int = 60
+    scanner_interval_1h_seconds: int = 300
+    scanner_trending_limit: int = 50
 
     model_config = SettingsConfigDict(
         env_file=(".env", f".env.{_app_env}"),
@@ -368,6 +368,10 @@ class Settings(BaseSettings):
         supported = set(self.supported_chains)
         deduped = dict.fromkeys(requested)
         return tuple(chain_id for chain_id in deduped if chain_id in supported)
+
+    @property
+    def scanner_chains(self) -> tuple[str, ...]:
+        return tuple(item.strip() for item in self.scanner_chains_raw.split(",") if item.strip())
 
     @property
     def replay_allowed_chains(self) -> tuple[str, ...]:

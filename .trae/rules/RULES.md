@@ -1,84 +1,78 @@
 # ChainMonitor Rules
 
-优先级分层：**P0（每轮遵守）** > **P1（任务结束时检查）** > **P2（linter / pre-commit 兜底）**。
+Priority tiers: **P0 (per-turn)** > **P1 (end-of-task)** > **P2 (linter/pre-commit)**.
 
 ---
 
-## P0 — 安全与正确性红线（每轮回复必须满足）
+## P0 — Safety & Correctness (every response)
 
-1. 执行任何 Python 前确认 `.venv` 存在（`Test-Path .\.venv\Scripts\python.exe`），不存在则 STOP
-2. Python 命令仅用 `.\.venv\Scripts\python -m <module>`，禁止全局 `python`/`pip`
-3. 数据库访问只通过 `src/shared/db/`，禁止在其他层直接写 SQL
-4. 异常不得吞掉，必须记录日志并转为一致错误响应（`message` + `trace_id`）
-5. 外部 HTTP 调用必须有超时；高风险接口必须有鉴权/限流
-6. 新配置必须进 `src/shared/config.py::Settings`（`CM_` 前缀），禁止 `os.getenv`
+1. Before any Python operation, verify `.venv` exists (`Test-Path .\.venv\Scripts\python.exe`). If not, STOP.
+2. Python commands must use `.\.venv\Scripts\python -m <module>` only. Never global `python`/`pip`.
+3. Database access goes through `src/shared/db/` only. No raw SQL outside it.
+4. Never swallow exceptions. Log and convert to consistent error response (`message` + `trace_id`).
+5. External HTTP calls must have timeouts. High-risk endpoints must have auth/rate-limit.
+6. New config goes into `src/shared/config.py::Settings` (`CM_` prefix). No `os.getenv` for business config.
 
-## P1 — 架构与质量约束（任务结束时自检）
+## P1 — Architecture & Quality (check at task end)
 
-7. 严格分层：路由层不做业务逻辑，业务层不直接写 SQL，禁止跨层调用内部实现。各模块职责见 `AGENTS.md`
-8. 跨层数据用 `src/shared/schemas/` 的 Pydantic 模型；序列化统一 `model_dump()`
-9. Python 3.11/3.12 兼容；新增模块加 `from __future__ import annotations`；完整类型标注；行宽 ≤ 100
-10. 表结构变更必须提供 Alembic migration（可 upgrade/downgrade）
-11. 每次改动至少补 1 条测试；高风险逻辑需 success + failure 路径
-12. 改配置/脚本/接口/监控时同步更新文档
+7. Strict layering: routing layer has no business logic, business layer has no raw SQL, no cross-layer internal calls. Module responsibilities in `AGENTS.md`.
+8. Cross-layer data uses Pydantic models from `src/shared/schemas/`. Serialize with `model_dump()`.
+9. Python 3.11/3.12 compatible. New modules: `from __future__ import annotations`. Full type annotations. Line length ≤ 100.
+10. Schema changes require Alembic migration (upgrade + downgrade).
+11. At least 1 test per change. High-risk logic needs success + failure paths.
+12. Update docs when changing config/scripts/APIs/monitoring.
 
-## P2 — 风格偏好（靠 linter + pre-commit 兜底）
+## P2 — Style (linter/pre-commit handles)
 
-13. 命名：函数/变量 `snake_case`，类 `PascalCase`，常量 `UPPER_SNAKE_CASE`
-14. 导入顺序遵循 ruff/isort；不引入未使用的 import
-
----
-
-## 行为准则
-
-综合自 Karpathy Guidelines，当与 P0 冲突时以 P0 为准。
-
-> Tradeoff：这些准则偏向谨慎而非速度。对于琐碎任务（修 typo、格式化等），自行判断是否跳过。
-
-### 先想后写
-- 假设说清楚。不确定就问，不猜
-- 有多个解释时列出，不沉默选一个
-- 有更简单方案就说出来，不要闷头做复杂的
-- 卡住了就停，说清哪里困惑
-
-### 简单优先
-- 只写解决问题所需的最小代码，不加投机性功能
-- 不用只为单处使用场景做抽象层、工厂、接口
-- 不加未请求的灵活性和可配置性
-- 不为不可能发生的场景写错误处理
-- 如果写了 200 行而本该 50 行，重写它
-- 自检问法："资深工程师会觉得这太复杂吗？" 如果是，简化
-
-### 最小改动
-- 只改请求范围内的代码。不顺手修旁边的格式、注释、命名
-- 不重构没坏的东西。匹配现有风格，即使你更喜欢另一种
-- 不改动产生的死代码（import/变量/函数）要清理，但不要动本来就有的死代码
-- 检验标准：每行改动都能直接追到用户需求
-
-### 目标驱动
-- 把模糊需求变成可验证的目标：
-  - 「加校验」→「写非法输入测试 → 让测试通过」
-  - 「修 bug」→「写复现测试 → 让测试通过」
-  - 「重构 X」→「确保重构前后测试全过」
-- 强成功标准让你能独立迭代；弱标准（"让它工作"）需要不断澄清
-- 多步任务开头给计划，每步带验证手段
-```
-1. [步骤] → 验证: [检查项]
-2. [步骤] → 验证: [检查项]
-```
-
-### 准则有效性信号
-如果做得对，应该看到：diff 里更少无关改动、更少因过度复杂而重写、澄清问题出现在实现之前而非犯错之后。
+13. Naming: functions/variables `snake_case`, classes `PascalCase`, constants `UPPER_SNAKE_CASE`.
+14. Import order follows ruff/isort. No unused imports.
 
 ---
 
-## 合规自检（任务结束时执行）
+## Behavior Guidelines
 
-格式：
+Adapted from Karpathy Guidelines. When in conflict with P0, P0 wins.
+
+> Tradeoff: These bias toward caution over speed. For trivial tasks (typo fixes, formatting), use judgment.
+
+### Think Before Coding
+- State assumptions explicitly. If unsure, ask. Don't guess.
+- If multiple interpretations exist, present them — don't silently pick one.
+- If a simpler approach exists, say so. Push back when warranted.
+- If stuck, stop and name what's confusing.
+
+### Simplicity First
+- Minimum code that solves the problem. Nothing speculative.
+- No abstractions (classes, factories, interfaces) for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If 200 lines could be 50, rewrite it.
+- Self-check: "Would a senior engineer call this overcomplicated?" If yes, simplify.
+
+### Surgical Changes
+- Touch only what you must. Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken. Match existing style.
+- Clean up imports/variables/functions YOUR changes made unused. Don't touch pre-existing dead code.
+- Test: every changed line traces directly to the user's request.
+
+### Goal-Driven Execution
+- Turn fuzzy requests into verifiable goals:
+  - "Add validation" → "Write tests for invalid inputs, then make them pass"
+  - "Fix the bug" → "Write a reproduction test, then make it pass"
+  - "Refactor X" → "Ensure tests pass before and after"
+- Strong success criteria let you iterate independently. Weak criteria ("make it work") invite endless clarification.
+- For multi-step tasks, state a brief plan upfront with verification per step:
 
 ```
-自检: P0 ✅(6/6) P1 ⚠️(4/6 缺#10 #12) | 风险: xxx | 下一步: xxx
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
 ```
 
-- P0 全过才能视为任务完成
-- P1 未满足项必须记录风险与下一步，不得隐瞒
+### Independent Judgment
+- When the user asks for your opinion/analysis (not a direct command), think independently first. State your own conclusion before acknowledging the user's stated view.
+- If the user says something you disagree with or that seems architecturally wrong, push back—don't nod through.
+- Bias toward being usefully correct, not agreeably wrong.
+- After giving your independent view, then ask "that said, do you want to go a different direction?" — but lead with your best judgment.
+
+### Signal of Success
+You're doing it right when: fewer unrelated changes in diffs, fewer rewrites due to overcomplication, clarifying questions come before implementation rather than after mistakes.
