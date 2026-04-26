@@ -21,19 +21,20 @@ class SnapshotStore:
         raw = [t.model_dump() for t in snapshot.tokens]
         for t in raw:
             t.pop("chain", None)
+        raw_json = json.dumps(raw)
         with self._engine.begin() as conn:
             conn.execute(
                 text(f"""
                     INSERT INTO {self._table} (chain, interval, snapshot_data, taken_at)
-                    VALUES (:chain, :interval, :data::jsonb, :taken_at)
+                    VALUES (:chain, :interval, CAST(:data AS JSONB), :taken_at)
                     ON CONFLICT (chain, interval)
-                    DO UPDATE SET snapshot_data = EXCLUDED.snapshot_data,
-                                  taken_at = EXCLUDED.taken_at
+                    DO UPDATE SET snapshot_data = CAST(:data AS JSONB),
+                                  taken_at = :taken_at
                 """),
                 {
                     "chain": chain,
                     "interval": interval,
-                    "data": json.dumps(raw),
+                    "data": raw_json,
                     "taken_at": snapshot.taken_at,
                 },
             )

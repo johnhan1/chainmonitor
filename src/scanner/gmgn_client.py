@@ -76,7 +76,6 @@ class GmgnClient:
             raw_tokens = inner
         elif isinstance(inner, dict):
             raw_tokens = next((v for v in inner.values() if isinstance(v, list)), [])
-            logger.info("gmgn-cli inner data keys=%s", list(inner.keys()))
         else:
             raw_tokens = []
         if not isinstance(raw_tokens, list):
