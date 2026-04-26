@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects.postgresql import JSONB
 
 # revision identifiers, used by Alembic.
 revision = "9b8c7d6e5f40"
@@ -23,7 +24,7 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("chain", sa.String(length=10), nullable=False),
         sa.Column("interval", sa.String(length=5), nullable=False),
-        sa.Column("snapshot_data", sa.JSONB(), nullable=False),
+        sa.Column("snapshot_data", JSONB(), nullable=False),
         sa.Column(
             "taken_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
         ),
