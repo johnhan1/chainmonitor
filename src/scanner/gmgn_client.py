@@ -59,7 +59,7 @@ class GmgnClient:
                 )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
             if proc.returncode != 0:
-                logger.error("gmgn-cli failed (exit=%d): %s", proc.returncode, stderr.decode())
+                logger.error("gmgn-cli failed (exit=%d) stderr=%s stdout=%s", proc.returncode, stderr.decode()[:500], stdout.decode()[:500])
                 return []
         except (TimeoutError, OSError) as e:
             logger.error("gmgn-cli error: %s", e)
@@ -68,26 +68,34 @@ class GmgnClient:
         try:
             data = json.loads(stdout)
         except json.JSONDecodeError as e:
-            logger.error("gmgn-cli JSON parse error: %s", e)
+            logger.error("gmgn-cli JSON parse error: %s (stdout=%s)", e, stdout.decode()[:500])
             return []
 
         raw_tokens = data.get("data", []) if isinstance(data, dict) else []
-        return [
-            TrendingToken(
-                address=t.get("address", ""),
-                symbol=t.get("symbol", ""),
-                name=t.get("name", ""),
-                price_usd=float(t.get("price_usd", 0) or 0),
-                volume_1m=_safe_float(t, "volume_1m"),
-                volume_1h=_safe_float(t, "volume_1h"),
-                market_cap=_safe_float(t, "market_cap"),
-                liquidity=_safe_float(t, "liquidity"),
-                smart_degen_count=t.get("smart_degen_count"),
-                rank=int(t.get("rank", 0)),
-                chain=chain,
+        if not isinstance(raw_tokens, list):
+            logger.warning("gmgn-cli unexpected data format: %s", type(raw_tokens).__name__)
+            return []
+        result: list[TrendingToken] = []
+        for t in raw_tokens:
+            if not isinstance(t, dict):
+                logger.warning("gmgn-cli skipping non-dict token: %s", type(t).__name__)
+                continue
+            result.append(
+                TrendingToken(
+                    address=t.get("address", ""),
+                    symbol=t.get("symbol", ""),
+                    name=t.get("name", ""),
+                    price_usd=float(t.get("price_usd", 0) or 0),
+                    volume_1m=_safe_float(t, "volume_1m"),
+                    volume_1h=_safe_float(t, "volume_1h"),
+                    market_cap=_safe_float(t, "market_cap"),
+                    liquidity=_safe_float(t, "liquidity"),
+                    smart_degen_count=t.get("smart_degen_count"),
+                    rank=int(t.get("rank", 0)),
+                    chain=chain,
+                )
             )
-            for t in raw_tokens
-        ]
+        return result
 
 
 def _safe_float(d: dict, key: str) -> float | None:
