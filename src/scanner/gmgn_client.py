@@ -6,7 +6,7 @@ import logging
 import os
 import sys
 
-from src.scanner.models import TrendingToken
+from src.scanner.models import TokenRisk, TrendingToken
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,11 @@ class GmgnClient:
 
         try:
             if sys.platform == "win32":
-                args = f"{self._cli_path} market trending --chain {chain} --interval {interval} --limit {limit} --raw"
+                args = (
+                    f"{self._cli_path} market trending"
+                    f" --chain {chain} --interval {interval}"
+                    f" --limit {limit} --raw"
+                )
                 proc = await asyncio.create_subprocess_shell(
                     args,
                     env=env,
@@ -46,9 +50,12 @@ class GmgnClient:
                     self._cli_path,
                     "market",
                     "trending",
-                    "--chain", chain,
-                    "--interval", interval,
-                    "--limit", str(limit),
+                    "--chain",
+                    chain,
+                    "--interval",
+                    interval,
+                    "--limit",
+                    str(limit),
                     "--raw",
                 ]
                 proc = await asyncio.create_subprocess_exec(
@@ -59,7 +66,12 @@ class GmgnClient:
                 )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
             if proc.returncode != 0:
-                logger.error("gmgn-cli failed (exit=%d) stderr=%s stdout=%s", proc.returncode, stderr.decode()[:500], stdout.decode()[:500])
+                logger.error(
+                    "gmgn-cli failed (exit=%d) stderr=%s stdout=%s",
+                    proc.returncode,
+                    stderr.decode()[:500],
+                    stdout.decode()[:500],
+                )
                 return []
         except (TimeoutError, OSError) as e:
             logger.error("gmgn-cli error: %s", e)
@@ -102,6 +114,55 @@ class GmgnClient:
                 )
             )
         return result
+
+    async def fetch_token_security(self, chain: str, address: str) -> TokenRisk | None:
+        cmd = [
+            self._cli_path,
+            "token",
+            "security",
+            "--chain",
+            chain,
+            "--address",
+            address,
+            "--raw",
+        ]
+        env = dict(os.environ)
+        if self._api_key:
+            env["GMGN_API_KEY"] = self._api_key
+        try:
+            if sys.platform == "win32":
+                args = " ".join(cmd)
+                proc = await asyncio.create_subprocess_shell(
+                    args,
+                    env=env,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+            else:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    env=env,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
+            if proc.returncode != 0:
+                return None
+            data = json.loads(stdout)
+            inner = data.get("data", {}) if isinstance(data, dict) else data
+            if not isinstance(inner, dict):
+                return None
+            return TokenRisk(
+                rug_risk=float(inner.get("rug_risk", 0) or 0),
+                is_honeypot=bool(inner.get("is_honeypot", False)),
+                bundler_ratio=float(inner.get("bundler_trader_amount_rate", 0) or 0),
+                rat_ratio=float(inner.get("rat_trader_amount_rate", 0) or 0),
+                sniper_count=int(inner.get("sniper_count", 0) or 0),
+                top10_holder_pct=float(inner.get("top10_holder_rate", 0) or 0),
+            )
+        except (json.JSONDecodeError, TimeoutError, OSError) as e:
+            logger.warning("fetch_token_security failed for %s: %s", address, e)
+            return None
 
 
 def _safe_float(d: dict, key: str) -> float | None:

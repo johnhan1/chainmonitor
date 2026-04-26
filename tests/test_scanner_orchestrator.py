@@ -1,10 +1,22 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from src.scanner.models import AnomalyEvent, AnomalyType, TrendingToken
+from src.scanner.models import AlphaSignal, ScoredToken, TrendingToken
 from src.scanner.orchestrator import ScannerOrchestrator
+
+
+def _make_signal(token: TrendingToken, level: str = "HIGH") -> AlphaSignal:
+    scored = ScoredToken(token=token, score=80, breakdown={"smart_money": 30})
+    return AlphaSignal(
+        token=scored,
+        level=level,
+        chain=token.chain,
+        interval="1m",
+        detected_at=datetime.now(UTC),
+    )
 
 
 @pytest.mark.asyncio
@@ -17,8 +29,8 @@ async def test_run_cycle_happy_path() -> None:
     mock_store = MagicMock()
     mock_store.load.return_value = None
 
-    mock_detector = MagicMock()
-    mock_detector.detect.return_value = []
+    mock_scorer = MagicMock()
+    mock_scorer.detect.return_value = []
 
     mock_notifier = AsyncMock()
 
@@ -26,7 +38,7 @@ async def test_run_cycle_happy_path() -> None:
         chains=["sol"],
         client=mock_client,
         store=mock_store,
-        detector=mock_detector,
+        scorer=mock_scorer,
         notifier=mock_notifier,
     )
     await orch.run_cycle()
@@ -36,7 +48,7 @@ async def test_run_cycle_happy_path() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_cycle_with_anomaly() -> None:
+async def test_run_cycle_with_alpha_signal() -> None:
     token = TrendingToken(address="0xa", symbol="A", name="A", price_usd=0.1, rank=1, chain="sol")
     mock_client = AsyncMock()
     mock_client.fetch_trending.return_value = [token]
@@ -44,10 +56,8 @@ async def test_run_cycle_with_anomaly() -> None:
     mock_store = MagicMock()
     mock_store.load.return_value = None
 
-    mock_detector = MagicMock()
-    mock_detector.detect.return_value = [
-        AnomalyEvent(type=AnomalyType.NEW, token=token, chain="sol", reason="new"),
-    ]
+    mock_scorer = MagicMock()
+    mock_scorer.detect.return_value = [_make_signal(token)]
 
     mock_notifier = AsyncMock()
 
@@ -55,12 +65,12 @@ async def test_run_cycle_with_anomaly() -> None:
         chains=["sol"],
         client=mock_client,
         store=mock_store,
-        detector=mock_detector,
+        scorer=mock_scorer,
         notifier=mock_notifier,
     )
     await orch.run_cycle()
 
-    mock_notifier.send_anomalies.assert_called_once()
+    mock_notifier.send_alpha.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -69,14 +79,14 @@ async def test_run_cycle_fetch_failure_skips_chain() -> None:
     mock_client.fetch_trending.return_value = []
 
     mock_store = MagicMock()
-    mock_detector = MagicMock()
+    mock_scorer = MagicMock()
     mock_notifier = AsyncMock()
 
     orch = ScannerOrchestrator(
         chains=["sol", "bsc"],
         client=mock_client,
         store=mock_store,
-        detector=mock_detector,
+        scorer=mock_scorer,
         notifier=mock_notifier,
     )
     await orch.run_cycle()

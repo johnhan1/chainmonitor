@@ -126,6 +126,16 @@ class Settings(BaseSettings):
     scanner_interval_1h_seconds: int = 300
     scanner_trending_limit: int = 50
 
+    # Scanner scoring
+    scanner_min_liquidity: float = 50_000.0
+    scanner_max_rug_risk: float = 0.8
+    scanner_max_bundler_rat_ratio: float = 0.7
+    scanner_score_high_threshold: int = 75
+    scanner_score_medium_threshold: int = 65
+    scanner_score_low_threshold: int = 55
+    scanner_cooldown_high_seconds: int = 900
+    scanner_cooldown_medium_seconds: int = 1800
+
     model_config = SettingsConfigDict(
         env_file=(".env", f".env.{_app_env}"),
         env_file_encoding="utf-8",

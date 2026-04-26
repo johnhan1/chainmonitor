@@ -4,7 +4,7 @@ import asyncio
 import logging
 import signal
 
-from src.scanner.detector import Detector
+from src.scanner.detector import AlphaScorer
 from src.scanner.gmgn_client import GmgnClient
 from src.scanner.notifier import TelegramNotifier
 from src.scanner.orchestrator import ScannerOrchestrator
@@ -34,19 +34,22 @@ async def main() -> None:
         api_key=settings.gmgn_api_key,
     )
     store = SnapshotStore(get_engine())
-    detector = Detector(
-        surge_threshold=settings.scanner_surge_threshold,
-        spike_ratio=settings.scanner_spike_ratio,
+    scorer = AlphaScorer(
+        min_liquidity=settings.scanner_min_liquidity,
+        max_rug_risk=settings.scanner_max_rug_risk,
+        max_bundler_rat_ratio=settings.scanner_max_bundler_rat_ratio,
     )
     notifier = TelegramNotifier(bot_token=bot_token, chat_id=chat_id)
     orch = ScannerOrchestrator(
         chains=list(settings.scanner_chains),
         client=client,
         store=store,
-        detector=detector,
+        scorer=scorer,
         notifier=notifier,
         trending_limit=settings.scanner_trending_limit,
         interval_1h_seconds=settings.scanner_interval_1h_seconds,
+        cooldown_high_seconds=settings.scanner_cooldown_high_seconds,
+        cooldown_medium_seconds=settings.scanner_cooldown_medium_seconds,
     )
 
     logger.info(

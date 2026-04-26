@@ -40,3 +40,34 @@ class AnomalyEvent(BaseModel):
     previous_rank: int | None = None
     rank_change: int | None = None
     reason: str
+
+
+class TokenRisk(BaseModel):
+    rug_risk: float = 0.0
+    is_honeypot: bool = False
+    bundler_ratio: float = 0.0
+    rat_ratio: float = 0.0
+    sniper_count: int = 0
+    top10_holder_pct: float = 0.0
+
+
+class FilterResult(BaseModel):
+    passed: bool = True
+    reason: str = ""
+
+
+class ScoredToken(BaseModel):
+    token: TrendingToken
+    score: int = 0
+    breakdown: dict[str, int] = {}
+    risk: TokenRisk | None = None
+    passed_filters: bool = True
+    filter_reason: str = ""
+
+
+class AlphaSignal(BaseModel):
+    token: ScoredToken
+    level: str
+    chain: str
+    interval: str
+    detected_at: datetime
