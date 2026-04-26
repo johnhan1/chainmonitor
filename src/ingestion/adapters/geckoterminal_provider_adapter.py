@@ -14,6 +14,7 @@ from src.ingestion.resilience.resilient_http_client import (
 from src.shared.config import Settings
 
 logger = logging.getLogger(__name__)
+PROVIDER = "geckoterminal"
 
 
 class GeckoTerminalProviderAdapter(ProviderAdapter):
@@ -49,6 +50,7 @@ class GeckoTerminalProviderAdapter(ProviderAdapter):
             if isinstance(result, Exception):
                 INGEST_ERROR_TOTAL.labels(
                     chain_id=self._chain_id,
+                    provider=PROVIDER,
                     reason="geckoterminal_address_task_error",
                 ).inc()
                 logger.warning(
@@ -79,7 +81,11 @@ class GeckoTerminalProviderAdapter(ProviderAdapter):
             return None
         pools = payload.get("data", [])
         if not isinstance(pools, list):
-            INGEST_ERROR_TOTAL.labels(chain_id=self._chain_id, reason="invalid_gecko_payload").inc()
+            INGEST_ERROR_TOTAL.labels(
+                chain_id=self._chain_id,
+                provider=PROVIDER,
+                reason="invalid_gecko_payload",
+            ).inc()
             return None
         included = payload.get("included", [])
         included_tokens = self._build_token_lookup(included=included)
@@ -151,7 +157,11 @@ class GeckoTerminalProviderAdapter(ProviderAdapter):
             or buys_5m is None
             or sells_5m is None
         ):
-            INGEST_ERROR_TOTAL.labels(chain_id=self._chain_id, reason="invalid_pair_numeric").inc()
+            INGEST_ERROR_TOTAL.labels(
+                chain_id=self._chain_id,
+                provider=PROVIDER,
+                reason="invalid_pair_numeric",
+            ).inc()
             return None
         dex_id = str(attributes.get("dex_id", ""))
         pool_address = str(attributes.get("address", ""))

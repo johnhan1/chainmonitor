@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     market_data_max_concurrency: int = 8
     market_data_rate_limit_per_second: float = 10.0
     market_data_rate_limit_capacity: int = 20
+    market_data_rate_limit_capacity_by_chain: str = ""
+    market_data_rate_limit_per_second_by_provider: str = ""
+    market_data_rate_limit_capacity_by_provider: str = ""
+    market_data_rate_limit_per_second_by_provider_chain: str = ""
+    market_data_rate_limit_capacity_by_provider_chain: str = ""
     market_data_circuit_failure_threshold: int = 5
     market_data_circuit_recovery_seconds: float = 30.0
     market_data_circuit_half_open_max_calls: int = 2
@@ -224,12 +229,46 @@ class Settings(BaseSettings):
             minimum=1,
         )
 
-    def get_market_data_rate_limit_per_second(self, chain_id: str) -> float:
+    def get_market_data_rate_limit_per_second(
+        self,
+        chain_id: str,
+        provider: str | None = None,
+    ) -> float:
+        provider_value = self._provider_float_override(
+            chain_id=chain_id,
+            provider=provider,
+            provider_chain_overrides=self.market_data_rate_limit_per_second_by_provider_chain,
+            provider_overrides=self.market_data_rate_limit_per_second_by_provider,
+            minimum=0.01,
+        )
+        if provider_value is not None:
+            return provider_value
         return self._chain_float_override(
             chain_id=chain_id,
             overrides=self.market_data_rate_limit_per_second_by_chain,
             default=self.market_data_rate_limit_per_second,
             minimum=0.01,
+        )
+
+    def get_market_data_rate_limit_capacity(
+        self,
+        chain_id: str,
+        provider: str | None = None,
+    ) -> int:
+        provider_value = self._provider_int_override(
+            chain_id=chain_id,
+            provider=provider,
+            provider_chain_overrides=self.market_data_rate_limit_capacity_by_provider_chain,
+            provider_overrides=self.market_data_rate_limit_capacity_by_provider,
+            minimum=1,
+        )
+        if provider_value is not None:
+            return provider_value
+        return self._chain_int_override(
+            chain_id=chain_id,
+            overrides=self.market_data_rate_limit_capacity_by_chain,
+            default=self.market_data_rate_limit_capacity,
+            minimum=1,
         )
 
     def get_market_data_circuit_failure_threshold(self, chain_id: str) -> int:
@@ -361,6 +400,64 @@ class Settings(BaseSettings):
         except ValueError:
             return max(minimum, float(default))
 
+    def _provider_int_override(
+        self,
+        chain_id: str,
+        provider: str | None,
+        provider_chain_overrides: str,
+        provider_overrides: str,
+        minimum: int,
+    ) -> int | None:
+        provider_key = (provider or "").strip().lower()
+        if not provider_key:
+            return None
+        provider_chain_parsed = self._parse_provider_chain_override(
+            overrides=provider_chain_overrides
+        )
+        raw = provider_chain_parsed.get((provider_key, chain_id))
+        if raw is not None:
+            try:
+                return max(minimum, int(raw))
+            except ValueError:
+                return None
+        provider_parsed = self._parse_provider_override(overrides=provider_overrides)
+        raw = provider_parsed.get(provider_key)
+        if raw is not None:
+            try:
+                return max(minimum, int(raw))
+            except ValueError:
+                return None
+        return None
+
+    def _provider_float_override(
+        self,
+        chain_id: str,
+        provider: str | None,
+        provider_chain_overrides: str,
+        provider_overrides: str,
+        minimum: float,
+    ) -> float | None:
+        provider_key = (provider or "").strip().lower()
+        if not provider_key:
+            return None
+        provider_chain_parsed = self._parse_provider_chain_override(
+            overrides=provider_chain_overrides
+        )
+        raw = provider_chain_parsed.get((provider_key, chain_id))
+        if raw is not None:
+            try:
+                return max(minimum, float(raw))
+            except ValueError:
+                return None
+        provider_parsed = self._parse_provider_override(overrides=provider_overrides)
+        raw = provider_parsed.get(provider_key)
+        if raw is not None:
+            try:
+                return max(minimum, float(raw))
+            except ValueError:
+                return None
+        return None
+
     @staticmethod
     def _parse_chain_override(overrides: str) -> dict[str, str]:
         items = [item.strip() for item in overrides.split(",") if item.strip()]
@@ -373,6 +470,39 @@ class Settings(BaseSettings):
             value = value.strip()
             if chain_key and value:
                 parsed[chain_key] = value
+        return parsed
+
+    @staticmethod
+    def _parse_provider_override(overrides: str) -> dict[str, str]:
+        items = [item.strip() for item in overrides.split(",") if item.strip()]
+        parsed: dict[str, str] = {}
+        for item in items:
+            if "=" not in item:
+                continue
+            provider, value = item.split("=", 1)
+            provider_key = provider.strip().lower()
+            value = value.strip()
+            if provider_key and value:
+                parsed[provider_key] = value
+        return parsed
+
+    @staticmethod
+    def _parse_provider_chain_override(overrides: str) -> dict[tuple[str, str], str]:
+        items = [item.strip() for item in overrides.split(",") if item.strip()]
+        parsed: dict[tuple[str, str], str] = {}
+        for item in items:
+            if "=" not in item:
+                continue
+            key, value = item.split("=", 1)
+            key = key.strip().lower()
+            value = value.strip()
+            if ":" not in key:
+                continue
+            provider, chain_id = key.split(":", 1)
+            provider = provider.strip().lower()
+            chain_id = chain_id.strip().lower()
+            if provider and chain_id and value:
+                parsed[(provider, chain_id)] = value
         return parsed
 
 

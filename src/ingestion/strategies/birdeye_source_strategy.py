@@ -15,6 +15,7 @@ from src.shared.config import get_settings
 from src.shared.schemas.pipeline import MarketTickInput
 
 logger = logging.getLogger(__name__)
+PROVIDER = "birdeye"
 
 INGEST_BIRDEYE_SUCCESS_RATIO = Gauge(
     "cm_ingestion_birdeye_success_ratio",
@@ -30,7 +31,12 @@ class BirdeyeSourceStrategy(BaseLiveSourceStrategy):
         api_key = settings.market_data_birdeye_api_key.strip()
         if api_key:
             headers["X-API-KEY"] = api_key
-        http_client = ResilientHttpClient(chain_id=chain_id, settings=settings, headers=headers)
+        http_client = ResilientHttpClient(
+            chain_id=chain_id,
+            provider=PROVIDER,
+            settings=settings,
+            headers=headers,
+        )
         super().__init__(
             chain_id=chain_id,
             adapter=BirdeyeProviderAdapter(
@@ -96,7 +102,9 @@ class BirdeyeSourceStrategy(BaseLiveSourceStrategy):
         if unresolved_required:
             detail = f"symbols={','.join(sorted(unresolved_required))}"
             INGEST_ERROR_TOTAL.labels(
-                chain_id=self.chain_id, reason="required_symbol_unresolved"
+                chain_id=self.chain_id,
+                provider=PROVIDER,
+                reason="required_symbol_unresolved",
             ).inc()
             raise IngestionFetchError(
                 reason="required_symbol_unresolved",
@@ -118,7 +126,11 @@ class BirdeyeSourceStrategy(BaseLiveSourceStrategy):
         results = await asyncio.gather(*tasks, return_exceptions=True)
         for symbol, result in zip(remaining, results, strict=False):
             if isinstance(result, Exception):
-                INGEST_ERROR_TOTAL.labels(chain_id=self.chain_id, reason="symbol_task_error").inc()
+                INGEST_ERROR_TOTAL.labels(
+                    chain_id=self.chain_id,
+                    provider=PROVIDER,
+                    reason="symbol_task_error",
+                ).inc()
                 logger.warning(
                     "birdeye symbol task failed chain=%s trace_id=%s symbol=%s error=%s",
                     self.chain_id,
@@ -144,7 +156,9 @@ class BirdeyeSourceStrategy(BaseLiveSourceStrategy):
         if missing_required_mapping:
             detail = f"symbols={','.join(sorted(missing_required_mapping))}"
             INGEST_ERROR_TOTAL.labels(
-                chain_id=self.chain_id, reason="required_mapping_missing"
+                chain_id=self.chain_id,
+                provider=PROVIDER,
+                reason="required_mapping_missing",
             ).inc()
             raise IngestionFetchError(
                 reason="required_mapping_missing",
@@ -185,7 +199,9 @@ class BirdeyeSourceStrategy(BaseLiveSourceStrategy):
         if missing_required_rows:
             detail = f"symbols={','.join(sorted(missing_required_rows))}"
             INGEST_ERROR_TOTAL.labels(
-                chain_id=self.chain_id, reason="required_symbol_invalid"
+                chain_id=self.chain_id,
+                provider=PROVIDER,
+                reason="required_symbol_invalid",
             ).inc()
             raise IngestionFetchError(
                 reason="required_symbol_invalid",

@@ -11,6 +11,7 @@ from src.ingestion.resilience.resilient_http_client import INGEST_ERROR_TOTAL, R
 from src.shared.config import Settings
 
 logger = logging.getLogger(__name__)
+PROVIDER = "birdeye"
 
 
 class BirdeyeProviderAdapter(ProviderAdapter):
@@ -45,7 +46,9 @@ class BirdeyeProviderAdapter(ProviderAdapter):
         for result in results:
             if isinstance(result, Exception):
                 INGEST_ERROR_TOTAL.labels(
-                    chain_id=self._chain_id, reason="birdeye_address_task_error"
+                    chain_id=self._chain_id,
+                    provider=PROVIDER,
+                    reason="birdeye_address_task_error",
                 ).inc()
                 logger.warning(
                     "birdeye address task failed chain=%s trace_id=%s error=%s",
@@ -127,7 +130,9 @@ class BirdeyeProviderAdapter(ProviderAdapter):
         data = payload.get("data", {})
         if not isinstance(data, dict):
             INGEST_ERROR_TOTAL.labels(
-                chain_id=self._chain_id, reason="invalid_birdeye_payload"
+                chain_id=self._chain_id,
+                provider=PROVIDER,
+                reason="invalid_birdeye_payload",
             ).inc()
             return None
         price_usd = self._safe_float(data.get("price"), default=None)
@@ -138,7 +143,11 @@ class BirdeyeProviderAdapter(ProviderAdapter):
         volume_24h = self._safe_float(data.get("volume24h"), default=None)
         trade_24h = self._safe_float(data.get("trade24h"), default=None)
         if price_usd is None or liquidity_usd is None or volume_24h is None or trade_24h is None:
-            INGEST_ERROR_TOTAL.labels(chain_id=self._chain_id, reason="invalid_pair_numeric").inc()
+            INGEST_ERROR_TOTAL.labels(
+                chain_id=self._chain_id,
+                provider=PROVIDER,
+                reason="invalid_pair_numeric",
+            ).inc()
             return None
         volume_5m = max(0.0, volume_24h / 288.0)
         tx_5m = max(0, int(trade_24h / 288.0))

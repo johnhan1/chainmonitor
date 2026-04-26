@@ -38,6 +38,30 @@ def test_settings_get_birdeye_chain() -> None:
     assert settings.get_birdeye_chain("eth") == "ethereum"
 
 
+def test_settings_rate_limit_resolves_by_provider_then_chain() -> None:
+    settings = Settings(
+        market_data_rate_limit_per_second=10.0,
+        market_data_rate_limit_per_second_by_chain="bsc=9.0",
+        market_data_rate_limit_per_second_by_provider="dexscreener=4.0",
+        market_data_rate_limit_per_second_by_provider_chain="dexscreener:bsc=3.5",
+    )
+    assert settings.get_market_data_rate_limit_per_second("bsc", provider="dexscreener") == 3.5
+    assert settings.get_market_data_rate_limit_per_second("eth", provider="dexscreener") == 4.0
+    assert settings.get_market_data_rate_limit_per_second("bsc", provider="unknown") == 9.0
+
+
+def test_settings_rate_limit_capacity_resolves_by_provider_then_chain() -> None:
+    settings = Settings(
+        market_data_rate_limit_capacity=20,
+        market_data_rate_limit_capacity_by_chain="bsc=18",
+        market_data_rate_limit_capacity_by_provider="dexscreener=8",
+        market_data_rate_limit_capacity_by_provider_chain="dexscreener:bsc=7",
+    )
+    assert settings.get_market_data_rate_limit_capacity("bsc", provider="dexscreener") == 7
+    assert settings.get_market_data_rate_limit_capacity("eth", provider="dexscreener") == 8
+    assert settings.get_market_data_rate_limit_capacity("bsc", provider="unknown") == 18
+
+
 def test_source_strategy_factory_uses_configured_strategy_order(monkeypatch) -> None:
     monkeypatch.setenv("CM_INGESTION_STRATEGY_ORDER", "dexscreener,geckoterminal,birdeye")
     get_settings.cache_clear()

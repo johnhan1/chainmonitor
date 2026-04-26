@@ -55,7 +55,7 @@ def test_fallback_chain_uses_secondary_when_primary_raises() -> None:
 
 def test_resilient_http_client_retries_on_429(monkeypatch) -> None:
     settings = get_settings()
-    client = ResilientHttpClient(chain_id="bsc", settings=settings)
+    client = ResilientHttpClient(chain_id="bsc", provider="dexscreener", settings=settings)
     client._cache_ttl_seconds = 0  # noqa: SLF001
     calls = {"count": 0}
 
@@ -83,7 +83,7 @@ def test_resilient_http_client_retries_on_429(monkeypatch) -> None:
 
 def test_resilient_http_client_retry_after_http_date_is_used() -> None:
     settings = get_settings()
-    client = ResilientHttpClient(chain_id="bsc", settings=settings)
+    client = ResilientHttpClient(chain_id="bsc", provider="dexscreener", settings=settings)
     retry_at = datetime.now(tz=UTC) + timedelta(seconds=2)
     response = httpx.Response(
         status_code=429,
@@ -121,6 +121,22 @@ def test_insufficient_coverage_raises(monkeypatch) -> None:
     with pytest.raises(IngestionFetchError) as exc:
         asyncio.run(strategy.fetch_market_ticks(datetime(2026, 4, 18, 12, 30, tzinfo=UTC)))
     assert exc.value.reason == "insufficient_coverage"
+
+
+def test_resilient_http_client_uses_provider_specific_rate_limit() -> None:
+    settings = get_settings().model_copy(
+        update={
+            "market_data_rate_limit_per_second": 10.0,
+            "market_data_rate_limit_capacity": 20,
+            "market_data_rate_limit_per_second_by_provider": "dexscreener=4,geckoterminal=2",
+            "market_data_rate_limit_capacity_by_provider": "dexscreener=8,geckoterminal=4",
+            "market_data_rate_limit_per_second_by_provider_chain": "dexscreener:bsc=3.5",
+            "market_data_rate_limit_capacity_by_provider_chain": "dexscreener:bsc=7",
+        }
+    )
+    client = ResilientHttpClient(chain_id="bsc", provider="dexscreener", settings=settings)
+    assert client._bucket.rate_per_second == pytest.approx(3.5)  # noqa: SLF001
+    assert client._bucket.capacity == pytest.approx(7.0)  # noqa: SLF001
 
 
 def test_required_symbol_invalid_when_row_filtered(monkeypatch) -> None:

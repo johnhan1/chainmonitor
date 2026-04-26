@@ -14,6 +14,7 @@ from src.ingestion.resilience.resilient_http_client import (
 from src.shared.config import Settings
 
 logger = logging.getLogger(__name__)
+PROVIDER = "dexscreener"
 
 
 class DexScreenerProviderAdapter(ProviderAdapter):
@@ -52,7 +53,9 @@ class DexScreenerProviderAdapter(ProviderAdapter):
         for chunk_result in chunk_results:
             if isinstance(chunk_result, Exception):
                 INGEST_ERROR_TOTAL.labels(
-                    chain_id=self._chain_id, reason="address_chunk_task_error"
+                    chain_id=self._chain_id,
+                    provider=PROVIDER,
+                    reason="address_chunk_task_error",
                 ).inc()
                 logger.warning(
                     "address chunk fetch task failed chain=%s trace_id=%s error=%s",
@@ -77,7 +80,11 @@ class DexScreenerProviderAdapter(ProviderAdapter):
             return None
         pairs = payload.get("pairs", [])
         if not isinstance(pairs, list):
-            INGEST_ERROR_TOTAL.labels(chain_id=self._chain_id, reason="invalid_pairs_payload").inc()
+            INGEST_ERROR_TOTAL.labels(
+                chain_id=self._chain_id,
+                provider=PROVIDER,
+                reason="invalid_pairs_payload",
+            ).inc()
             return None
         candidates = self._filter_symbol_candidates(symbol=symbol_upper, pairs=pairs)
         if not candidates:
@@ -105,7 +112,11 @@ class DexScreenerProviderAdapter(ProviderAdapter):
             return {}
         pairs = payload.get("pairs", [])
         if not isinstance(pairs, list):
-            INGEST_ERROR_TOTAL.labels(chain_id=self._chain_id, reason="invalid_pairs_payload").inc()
+            INGEST_ERROR_TOTAL.labels(
+                chain_id=self._chain_id,
+                provider=PROVIDER,
+                reason="invalid_pairs_payload",
+            ).inc()
             return {}
 
         grouped: dict[str, list[dict]] = {}
@@ -154,7 +165,11 @@ class DexScreenerProviderAdapter(ProviderAdapter):
             or buys_5m is None
             or sells_5m is None
         ):
-            INGEST_ERROR_TOTAL.labels(chain_id=self._chain_id, reason="invalid_pair_numeric").inc()
+            INGEST_ERROR_TOTAL.labels(
+                chain_id=self._chain_id,
+                provider=PROVIDER,
+                reason="invalid_pair_numeric",
+            ).inc()
             return None
         pair_created_at = raw_pair.get("pairCreatedAt")
         pair_created_at_ms = None

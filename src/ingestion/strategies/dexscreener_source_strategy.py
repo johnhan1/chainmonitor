@@ -15,6 +15,7 @@ from src.shared.config import get_settings
 from src.shared.schemas.pipeline import MarketTickInput
 
 logger = logging.getLogger(__name__)
+PROVIDER = "dexscreener"
 
 INGEST_ADDRESS_MAPPING_MISSING_TOTAL = Counter(
     "cm_ingestion_address_mapping_missing_total",
@@ -33,6 +34,7 @@ class DexScreenerSourceStrategy(BaseLiveSourceStrategy):
         settings = get_settings()
         http_client = ResilientHttpClient(
             chain_id=chain_id,
+            provider=PROVIDER,
             settings=settings,
         )
         super().__init__(
@@ -105,6 +107,7 @@ class DexScreenerSourceStrategy(BaseLiveSourceStrategy):
             detail = f"symbols={','.join(sorted(unresolved_required))}"
             INGEST_ERROR_TOTAL.labels(
                 chain_id=self.chain_id,
+                provider=PROVIDER,
                 reason="required_symbol_unresolved",
             ).inc()
             raise IngestionFetchError(
@@ -128,7 +131,11 @@ class DexScreenerSourceStrategy(BaseLiveSourceStrategy):
         results = await asyncio.gather(*tasks, return_exceptions=True)
         for symbol, result in zip(remaining, results, strict=False):
             if isinstance(result, Exception):
-                INGEST_ERROR_TOTAL.labels(chain_id=self.chain_id, reason="symbol_task_error").inc()
+                INGEST_ERROR_TOTAL.labels(
+                    chain_id=self.chain_id,
+                    provider=PROVIDER,
+                    reason="symbol_task_error",
+                ).inc()
                 logger.warning(
                     "symbol fetch task failed chain=%s trace_id=%s symbol=%s error=%s",
                     self.chain_id,
@@ -166,7 +173,9 @@ class DexScreenerSourceStrategy(BaseLiveSourceStrategy):
         if missing_required_mapping:
             detail = f"symbols={','.join(sorted(missing_required_mapping))}"
             INGEST_ERROR_TOTAL.labels(
-                chain_id=self.chain_id, reason="required_mapping_missing"
+                chain_id=self.chain_id,
+                provider=PROVIDER,
+                reason="required_mapping_missing",
             ).inc()
             raise IngestionFetchError(
                 reason="required_mapping_missing",
@@ -215,6 +224,7 @@ class DexScreenerSourceStrategy(BaseLiveSourceStrategy):
             detail = f"symbols={','.join(sorted(missing_required_rows))}"
             INGEST_ERROR_TOTAL.labels(
                 chain_id=self.chain_id,
+                provider=PROVIDER,
                 reason="required_symbol_invalid",
             ).inc()
             raise IngestionFetchError(

@@ -6,7 +6,7 @@
 2. 每个子目录/文件分别负责什么
 3. 如何新增数据源、如何新增一条链（详细步骤）
 
----
+***
 
 ## 1. `src/ingestion` 整体职责
 
@@ -19,7 +19,7 @@
 
 它不是“业务打分/策略决策层”，而是“可靠拿到标准化行情输入”的基础设施层。
 
----
+***
 
 ## 2. 架构模式（先看全局）
 
@@ -37,7 +37,7 @@
 
 `ChainIngestionService` -> `SourceStrategyFactory.create(...)` -> `FallbackSourceChain(sources=[s1,s2,s3])` -> `按顺序补齐缺失 token`
 
----
+***
 
 ## 3. 目录与文件逐个说明
 
@@ -56,7 +56,7 @@
 
 - 初始化时校验 `chain_id` 是否在配置支持列表里
 - 解析链的 symbol 列表（`_symbols()`）
-- 统一 token_id 生成规则（`_token_id(symbol)` -> `"{chain}_{symbol}"`）
+- 统一 token\_id 生成规则（`_token_id(symbol)` -> `"{chain}_{symbol}"`）
 - 统一分钟时间归一化（UTC，秒和微秒归零）
 - 稳定随机种子生成（供一致性哈希与测试场景复用）
 
@@ -145,23 +145,41 @@
 
 - 导出 `AsyncTokenBucket`、`AsyncCircuitBreaker`、`ResilientHttpClient`
 
-#### `src/ingestion/resilience/controls.py`
+#### `src/ingestion/resilience/rate_limiter.py`
 
-提供通用韧性组件：
+- 定义 `AsyncTokenBucket` 令牌桶限流器
+- 负责请求前节流与突发流量平滑
 
-- `AsyncTokenBucket`：异步令牌桶，控制请求速率
-- `AsyncCircuitBreaker`：异步熔断器（closed/open/half_open）
-  - 达到失败阈值后打开熔断
-  - 恢复窗口后进入 half-open 探测
-  - 成功后恢复 closed
+#### `src/ingestion/resilience/circuit_breaker.py`
 
-这是网络不稳定场景下控制放大故障的关键基础件。
+- 定义 `AsyncCircuitBreaker` 熔断器状态机（closed/open/half\_open）
+- 负责故障窗口短路与恢复探测
+
+#### `src/ingestion/resilience/singleflight.py`
+
+- 定义 `SingleFlightGroup`
+- 对同 URL 并发请求做去重，只允许一个 leader 请求上游
+
+#### `src/ingestion/resilience/retry_policy.py`
+
+- 定义 `RetryPolicy`
+- 负责可重试错误判定、错误归因、`Retry-After` 解析与退避时间计算
+
+#### `src/ingestion/resilience/cache_store.py`
+
+- 定义 `ResponseCacheStore`
+- 负责进程内 LRU/TTL 缓存与可选 Redis 二级缓存
+
+#### `src/ingestion/resilience/metrics.py`
+
+- 定义 `ResilienceMetrics` 与采集层韧性指标
+- 负责请求/重试/熔断/缓存等 Prometheus 指标记录
 
 #### `src/ingestion/resilience/resilient_http_client.py`
 
-- 提供统一 HTTP 韧性客户端 `ResilientHttpClient`
-- 内聚重试、指数退避、熔断、限流、进程内缓存、Redis 缓存、singleflight
-- 对 adapter 暴露统一 `get_json(...)` 接口，避免策略层重复实现请求逻辑
+- 定义薄编排器 `ResilientHttpClient`
+- 统一调度 `rate_limiter`、`circuit_breaker`、`retry_policy`、`singleflight`、`cache_store`、`metrics`
+- 对 adapter 暴露统一 `get_json(...)` 接口，避免策略层重复实现请求链路
 
 ### 3.6 `services/`
 
@@ -228,7 +246,7 @@
 - 在 DexScreener / GeckoTerminal 覆盖不足时补齐
 - 复用统一模板流程、质量门禁和韧性请求层
 
----
+***
 
 ## 4. 配置与 `ingestion` 的关系
 
@@ -241,11 +259,11 @@
 - 可选地址映射通过 `get_chain_token_addresses(chain_id)`
 - 数据源顺序通过：
   - `CM_INGESTION_STRATEGY_ORDER`（例如 `dexscreener,geckoterminal,birdeye`）
-- 韧性参数通过 `CM_MARKET_DATA_*` 及 `*_BY_CHAIN` 覆盖
+- 韧性参数通过 `CM_MARKET_DATA_*`、`*_BY_CHAIN`、`*_BY_PROVIDER`、`*_BY_PROVIDER_CHAIN` 覆盖
 
 所以新增链或调整采集行为，绝大部分入口都在配置层。
 
----
+***
 
 ## 5. 如何新增一个“数据源”（详细步骤）
 
@@ -264,7 +282,7 @@
 建议遵循现有约定：
 
 - 用 `self._symbols()` 作为目标 token 集
-- 用 `self._token_id(symbol)` 统一 token_id
+- 用 `self._token_id(symbol)` 统一 token\_id
 - 用 `self._normalize_ts(ts_minute)` 统一分钟粒度时间
 
 ### 步骤 2：更新策略包导出
@@ -301,7 +319,7 @@
 - 异常链路：可抛结构化 `IngestionFetchError`
 - 指标与日志：是否有足够可观测信息（建议对齐 DexScreener 策略风格）
 
----
+***
 
 ## 6. 如何新增一条链（详细步骤）
 
@@ -354,6 +372,11 @@
 - `CM_MARKET_DATA_RETRY_ATTEMPTS_BY_CHAIN=arb=...`
 - `CM_MARKET_DATA_MAX_CONCURRENCY_BY_CHAIN=arb=...`
 - `CM_MARKET_DATA_RATE_LIMIT_PER_SECOND_BY_CHAIN=arb=...`
+- `CM_MARKET_DATA_RATE_LIMIT_CAPACITY_BY_CHAIN=arb=...`
+- `CM_MARKET_DATA_RATE_LIMIT_PER_SECOND_BY_PROVIDER=dexscreener=...,geckoterminal=...,birdeye=...`
+- `CM_MARKET_DATA_RATE_LIMIT_CAPACITY_BY_PROVIDER=dexscreener=...,geckoterminal=...,birdeye=...`
+- `CM_MARKET_DATA_RATE_LIMIT_PER_SECOND_BY_PROVIDER_CHAIN=dexscreener:arb=...,birdeye:arb=...`
+- `CM_MARKET_DATA_RATE_LIMIT_CAPACITY_BY_PROVIDER_CHAIN=dexscreener:arb=...,birdeye:arb=...`
 - `CM_MARKET_DATA_CIRCUIT_FAILURE_THRESHOLD_BY_CHAIN=arb=...`
 - `CM_MARKET_DATA_CIRCUIT_RECOVERY_SECONDS_BY_CHAIN=arb=...`
 - `CM_MARKET_DATA_MIN_SUCCESS_RATIO_BY_CHAIN=arb=...`
@@ -367,7 +390,7 @@
 2. 验证二级、三级兜底补齐逻辑
 3. 观察日志与 Prometheus 指标（成功率、重试、熔断、缺失映射）
 
----
+***
 
 ## 7. 两类扩展的“最小修改面”总结
 
@@ -383,13 +406,13 @@
 ### 新增链（可不加新数据源）
 
 - 必改：
-  - `src/shared/config.py`（字段 + supported_chains + 各 mapping）
+  - `src/shared/config.py`（字段 + supported\_chains + 各 mapping）
   - `.env*.example`（新增链相关变量）
 - 常改：
   - `.env` 实际值（symbols、addresses、按链阈值）
   - 调度链列表 `CM_PIPELINE_SCHEDULER_CHAINS`
 
----
+***
 
 ## 8. 常见坑位
 
@@ -399,7 +422,7 @@
 - 新链没有 token 地址映射时，DexScreener 仍可走 symbol 搜索，但覆盖率可能下降，触发 `insufficient_coverage`。
 - `CM_MARKET_DATA_MIN_SUCCESS_RATIO` 设得过高会导致多源补齐后仍判定失败；建议按链单独调优。
 
----
+***
 
 ## 9. 一句话结论
 
