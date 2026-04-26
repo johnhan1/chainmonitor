@@ -25,6 +25,8 @@ class TelegramNotifier:
                     self._base_url,
                     json={"chat_id": self._chat_id, "text": text, "parse_mode": "MarkdownV2"},
                 )
+                if resp.status_code == 400:
+                    logger.error("TG 400 body: %s", resp.text[:500])
                 resp.raise_for_status()
             except httpx.HTTPError as e:
                 logger.error("TG send failed: %s", e)
