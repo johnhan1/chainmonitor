@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from src.scanner.models import AnomalyEvent, AnomalyType, Snapshot, TrendingToken
 
@@ -33,7 +33,7 @@ def test_snapshot_roundtrip() -> None:
         chain="sol",
         interval="1m",
         tokens=[t],
-        taken_at=datetime.now(datetime.UTC),
+        taken_at=datetime.now(timezone.utc),  # noqa: UP017
     )
     assert snap.tokens[0].symbol == "TEST"
     assert snap.tokens[0].volume_1m == 1000.0
