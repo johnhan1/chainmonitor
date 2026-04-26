@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("init", "up", "up-lite", "down", "reset", "migrate", "check", "smoke", "bsc-run-once", "backup", "restore", "status", "phase2-full-check", "all")]
+  [ValidateSet("init", "up", "up-lite", "down", "reset", "migrate", "check", "smoke", "scanner", "bsc-run-once", "backup", "restore", "status", "phase2-full-check", "all")]
   [string]$Command,
   [string]$BackupFile = ""
 )
@@ -45,6 +45,9 @@ switch ($Command) {
   }
   "smoke" {
     Invoke-Checked ".\scripts\smoke.ps1"
+  }
+  "scanner" {
+    Invoke-Checked ".\scripts\run-scanner.ps1"
   }
   "bsc-run-once" {
     Invoke-Checked ".\scripts\bsc-run-once.ps1"
