@@ -71,9 +71,9 @@ class GmgnClient:
             logger.error("gmgn-cli JSON parse error: %s (stdout=%s)", e, stdout.decode()[:500])
             return []
 
-        raw_tokens = data.get("data", []) if isinstance(data, dict) else []
+        raw_tokens = data if isinstance(data, list) else (data.get("data", []) if isinstance(data, dict) else [])
         if not isinstance(raw_tokens, list):
-            logger.warning("gmgn-cli unexpected data format: %s", type(raw_tokens).__name__)
+            logger.warning("gmgn-cli unexpected data format=%s keys=%s", type(raw_tokens).__name__, list(data.keys()) if isinstance(data, dict) else "?")
             return []
         result: list[TrendingToken] = []
         for t in raw_tokens:
