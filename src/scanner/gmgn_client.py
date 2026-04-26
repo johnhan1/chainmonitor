@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import sys
 
 from src.scanner.models import TrendingToken
 
@@ -26,29 +28,35 @@ class GmgnClient:
         interval: str,
         limit: int = 50,
     ) -> list[TrendingToken]:
-        cmd = [
-            self._cli_path,
-            "market",
-            "trending",
-            "--chain",
-            chain,
-            "--interval",
-            interval,
-            "--limit",
-            str(limit),
-            "--raw",
-        ]
-        env = {}
+        env = dict(os.environ)
         if self._api_key:
             env["GMGN_API_KEY"] = self._api_key
 
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                env=env or None,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
+            if sys.platform == "win32":
+                args = f"{self._cli_path} market trending --chain {chain} --interval {interval} --limit {limit} --raw"
+                proc = await asyncio.create_subprocess_shell(
+                    args,
+                    env=env,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+            else:
+                cmd = [
+                    self._cli_path,
+                    "market",
+                    "trending",
+                    "--chain", chain,
+                    "--interval", interval,
+                    "--limit", str(limit),
+                    "--raw",
+                ]
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    env=env,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
             if proc.returncode != 0:
                 logger.error("gmgn-cli failed (exit=%d): %s", proc.returncode, stderr.decode())
