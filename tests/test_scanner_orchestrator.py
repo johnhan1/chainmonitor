@@ -169,3 +169,35 @@ async def test_run_cycle_emits_events() -> None:
     assert "TokenScored" in event_types
     assert "SignalEmitted" in event_types
     assert "ChainScanCompleted" in event_types
+
+
+@pytest.mark.asyncio
+async def test_run_cycle_parallel_security() -> None:
+    token_a = _make_token("0xa")
+    token_b = _make_token("0xb")
+    token_a.liquidity = 50_000
+    token_b.liquidity = 50_000
+    mock_client = AsyncMock()
+    mock_client.fetch_trending.return_value = [token_a, token_b]
+    mock_client.fetch_token_security = AsyncMock(return_value=None)
+
+    mock_store = MagicMock()
+    mock_store.load.return_value = None
+
+    mock_scorer = MagicMock()
+    mock_scorer.detect.return_value = []
+    mock_scorer.hard_filter.return_value = FilterResult(passed=True)
+    mock_scorer.score.return_value = ScoredToken(token=token_a, score=50, breakdown={})
+
+    mock_notifier = AsyncMock()
+
+    orch = ScannerOrchestrator(
+        chains=["sol"],
+        client=mock_client,
+        store=mock_store,
+        scorer=mock_scorer,
+        notifier=mock_notifier,
+    )
+    await orch.run_cycle()
+
+    assert mock_client.fetch_token_security.call_count == 2

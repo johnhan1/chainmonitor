@@ -104,25 +104,33 @@ class ScannerOrchestrator:
 
         risks: dict[str, TokenRisk] = {}
         seen: set[str] = set()
+        security_tasks: list[tuple[str, str, asyncio.Task]] = []
         for t in tokens:
             if t.address in seen:
                 continue
             seen.add(t.address)
             if t.liquidity is not None and t.liquidity < 100_000:
-                t1 = self._clock()
-                risk = await self._client.fetch_token_security(chain, t.address)
-                sec_dur = (self._clock() - t1).total_seconds() * 1000
+                task = asyncio.create_task(self._client.fetch_token_security(chain, t.address))
+                security_tasks.append((t.address, t.symbol, task))
+
+        for addr, symbol, task in security_tasks:
+            try:
+                t0 = self._clock()
+                risk = await task
+                sec_dur = (self._clock() - t0).total_seconds() * 1000
                 self._event_bus.publish(
                     TokenSecurityChecked(
                         chain=chain,
-                        address=t.address,
-                        symbol=t.symbol,
+                        address=addr,
+                        symbol=symbol,
                         duration_ms=sec_dur,
                         success=risk is not None,
                     )
                 )
                 if risk:
-                    risks[t.address] = risk
+                    risks[addr] = risk
+            except Exception:
+                logger.exception("Security check failed for %s", addr)
 
         signals = self._scorer.detect(prev, curr, risks)
 
