@@ -45,10 +45,6 @@ class AlphaScorer:
                     passed=False,
                     reason=f"bundler+rat={risk.bundler_ratio + risk.rat_ratio:.2f}",
                 )
-        if token.smart_degen_count is not None and token.smart_degen_count == 0:
-            vol = token.volume_1m or 0
-            if vol > 100_000:
-                return FilterResult(passed=False, reason="high_volume_no_smart_degen")
         return FilterResult(passed=True)
 
     def score(
@@ -136,6 +132,12 @@ class AlphaScorer:
                 risk_penalty = -5
             if risk.is_honeypot:
                 risk_penalty = -10
+        # 异常成交量 penalty (不依赖 risk 数据)
+        # 与 rug/honeypot penalty 叠加取最严 (min)，以 max -10 为限
+        if token.smart_degen_count is not None and token.smart_degen_count == 0:
+            vol = token.volume_1m or 0
+            if vol > 100_000:
+                risk_penalty = min(risk_penalty, -10)
         breakdown["risk_penalty"] = risk_penalty
 
         total = sum(breakdown.values())

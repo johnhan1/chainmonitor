@@ -74,12 +74,47 @@ def test_hard_filter_fail_bundler_rat() -> None:
     assert "bundler+rat" in result.reason
 
 
-def test_hard_filter_fail_high_volume_no_smart_degen() -> None:
+def test_hard_filter_pass_high_volume_no_smart_degen() -> None:
     scorer = AlphaScorer()
     token = _token("0xa", "A", 1, liquidity=100_000, volume_1m=200_000, smart_degen=0)
     result = scorer.hard_filter(token, None)
-    assert not result.passed
-    assert result.reason == "high_volume_no_smart_degen"
+    assert result.passed  # no longer rejected, becomes a penalty in score()
+
+
+def test_score_penalty_high_volume_no_smart_degen() -> None:
+    scorer = AlphaScorer()
+    token = _token("0xa", "A", 1, volume_1m=200_000, smart_degen=0, liquidity=100_000)
+    scored = scorer.score(token, None, None)
+    assert scored.breakdown["risk_penalty"] == -10
+
+
+def test_no_penalty_when_volume_below_threshold() -> None:
+    scorer = AlphaScorer()
+    token = _token("0xa", "A", 1, volume_1m=50_000, smart_degen=0, liquidity=100_000)
+    scored = scorer.score(token, None, None)
+    assert scored.breakdown["risk_penalty"] == 0
+
+
+def test_no_penalty_when_smart_degen_is_none() -> None:
+    scorer = AlphaScorer()
+    token = _token("0xa", "A", 1, volume_1m=200_000, smart_degen=None, liquidity=100_000)
+    scored = scorer.score(token, None, None)
+    assert scored.breakdown["risk_penalty"] == 0
+
+
+def test_no_penalty_when_smart_degen_above_zero() -> None:
+    scorer = AlphaScorer()
+    token = _token("0xa", "A", 1, volume_1m=200_000, smart_degen=3, liquidity=100_000)
+    scored = scorer.score(token, None, None)
+    assert scored.breakdown["risk_penalty"] == 0
+
+
+def test_score_penalty_propagates_to_total() -> None:
+    scorer = AlphaScorer(min_liquidity=0)
+    token = _token("0xa", "A", 1, volume_1m=200_000, smart_degen=0, liquidity=100_000)
+    scored = scorer.score(token, None, None)
+    # rank_momentum(10) + volume_quality(15) + structure(10) + risk_penalty(-10) = 25
+    assert scored.score == 25
 
 
 def test_score_new_token() -> None:
