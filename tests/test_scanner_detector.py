@@ -199,6 +199,22 @@ def test_score_rank_momentum_40_plus() -> None:
     assert scored.breakdown["rank_momentum"] == 25
 
 
+def test_smart_money_delta_ratio_boost() -> None:
+    scorer = AlphaScorer()
+    # Same delta=3 but starting from low vs high base
+    # delta=3 gives base score 25; low base gets ratio boost to 30
+    prev_low = _token("0xa", "A", 1, volume_1m=5000, smart_degen=1, liquidity=100_000)
+    curr_low = _token("0xa", "A", 1, volume_1m=5000, smart_degen=4, liquidity=100_000)
+    scored_low = scorer.score(curr_low, prev_low, None)
+
+    prev_high = _token("0xb", "B", 1, volume_1m=5000, smart_degen=10, liquidity=100_000)
+    curr_high = _token("0xb", "B", 1, volume_1m=5000, smart_degen=13, liquidity=100_000)
+    scored_high = scorer.score(curr_high, prev_high, None)
+
+    # Low base should score higher (3/1=300% ratio boost vs 3/10=30% no boost)
+    assert scored_low.breakdown["smart_money"] > scored_high.breakdown["smart_money"]
+
+
 def test_detect_custom_thresholds() -> None:
     scorer = AlphaScorer(min_liquidity=0, score_high=50, score_medium=40, score_low=30)
     prev = _snapshot([_token("0xa", "A", 30, volume_1m=50_000, smart_degen=5, liquidity=100_000)])

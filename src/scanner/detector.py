@@ -64,21 +64,32 @@ class AlphaScorer:
         # 聪明钱领先 (max 30)
         smart_score = 0
         if token.smart_degen_count is not None:
+            base_count = token.smart_degen_count
             if prev and prev.smart_degen_count is not None:
-                delta = token.smart_degen_count - prev.smart_degen_count
+                delta = base_count - prev.smart_degen_count
                 if delta >= 5:
                     smart_score = 30
                 elif delta >= 3:
                     smart_score = 25
                 elif delta >= 1:
                     smart_score = 20
-                elif token.smart_degen_count >= 10:
+                elif base_count >= 10:
                     smart_score = 15
-            elif token.smart_degen_count >= 5:
-                smart_score = 15
-            if token.smart_degen_count >= 3:
-                smart_score = max(smart_score, 10)
-        breakdown["smart_money"] = smart_score
+                # Proportional boost: same delta is stronger when starting from low base
+                if delta > 0 and prev.smart_degen_count > 0:
+                    ratio = delta / prev.smart_degen_count
+                    if ratio > 0.5:
+                        boost = min(5, int(ratio * 10))
+                        smart_score = min(30, smart_score + boost)
+                # Floor: high absolute count still matters
+                if base_count >= 5 and smart_score < 10:
+                    smart_score = 10
+            else:
+                if base_count >= 5:
+                    smart_score = 15
+                elif base_count >= 3:
+                    smart_score = 10
+        breakdown["smart_money"] = min(smart_score, 30)
 
         # 排名加速度 (max 25)
         rank_score = 0
