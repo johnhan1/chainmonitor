@@ -190,6 +190,18 @@ class ScannerOrchestrator:
                 logger.debug("Cooldown skip %s (%s)", sig.token.token.symbol, addr)
                 continue
 
+            # Apply decay for repeat signals
+            decay = self._cooldown.decay_factor(addr)
+            if decay < 1.0:
+                sig.token.score = int(sig.token.score * decay)
+                sig.token.breakdown = {}
+                logger.info(
+                    "Decayed signal for %s: factor=%.1f score=%d",
+                    sig.token.token.symbol,
+                    decay,
+                    sig.token.score,
+                )
+
             self._event_bus.publish(
                 SignalEmitted(
                     chain=chain,

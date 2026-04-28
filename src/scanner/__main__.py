@@ -63,6 +63,7 @@ async def main() -> None:
     cooldown = CooldownManager(
         cooldown_high_seconds=settings.scanner_cooldown_high_seconds,
         cooldown_medium_seconds=settings.scanner_cooldown_medium_seconds,
+        cooldown_observe_seconds=settings.scanner_cooldown_observe_seconds,
     )
 
     orch = ScannerOrchestrator(

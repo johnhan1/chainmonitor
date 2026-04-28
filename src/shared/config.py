@@ -135,6 +135,7 @@ class Settings(BaseSettings):
     scanner_score_low_threshold: int = 55
     scanner_cooldown_high_seconds: int = 900
     scanner_cooldown_medium_seconds: int = 1800
+    scanner_cooldown_observe_seconds: int = 300
     scanner_metrics_port: int = 9101
 
     model_config = SettingsConfigDict(
