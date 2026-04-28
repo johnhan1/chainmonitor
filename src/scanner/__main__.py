@@ -31,14 +31,14 @@ async def main() -> None:
         return
 
     # Observability
-    from src.scanner.events import EVENT_TYPES, EventBus
+    from src.scanner.events import ALL_EVENT_TYPES, EventBus
     from src.scanner.handlers import MetricsHandler, StructuredLogHandler
     from src.scanner.metrics import ScannerMetrics, start_metrics_server
 
     event_bus = EventBus()
     log_handler = StructuredLogHandler()
     metrics_handler = MetricsHandler(ScannerMetrics())
-    for et in EVENT_TYPES:
+    for et in ALL_EVENT_TYPES:
         event_bus.subscribe(et, log_handler)
         event_bus.subscribe(et, metrics_handler)
 
