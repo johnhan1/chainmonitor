@@ -18,6 +18,7 @@ class TrendingToken(BaseModel):
     smart_degen_count: int | None = None
     rank: int
     chain: str
+    also_in_1h: bool = False
 
 
 class Snapshot(BaseModel):

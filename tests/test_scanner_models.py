@@ -39,6 +39,18 @@ def test_snapshot_roundtrip() -> None:
     assert snap.tokens[0].volume_1m == 1000.0
 
 
+def test_trending_token_also_in_1h_default() -> None:
+    t = TrendingToken(
+        address="0xabc",
+        symbol="TEST",
+        name="Test Token",
+        price_usd=0.123,
+        rank=1,
+        chain="sol",
+    )
+    assert t.also_in_1h is False
+
+
 def test_anomaly_event_defaults() -> None:
     t = TrendingToken(
         address="0xabc",

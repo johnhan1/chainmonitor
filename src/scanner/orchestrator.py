@@ -102,6 +102,14 @@ class ScannerOrchestrator:
         curr = Snapshot(chain=chain, interval=interval, tokens=tokens, taken_at=self._clock())
         prev = self._store.load(chain, interval)
 
+        if interval == "1m":
+            prev_1h = self._store.load(chain, "1h")
+            if prev_1h:
+                addrs_1h = {t.address for t in prev_1h.tokens}
+                for t in curr.tokens:
+                    if t.address in addrs_1h:
+                        t.also_in_1h = True
+
         risks: dict[str, TokenRisk] = {}
         seen: set[str] = set()
         security_tasks: list[tuple[str, str, asyncio.Task]] = []

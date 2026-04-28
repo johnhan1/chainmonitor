@@ -215,6 +215,21 @@ def test_smart_money_delta_ratio_boost() -> None:
     assert scored_low.breakdown["smart_money"] > scored_high.breakdown["smart_money"]
 
 
+def test_score_timeframe_confirmed() -> None:
+    scorer = AlphaScorer()
+    token = _token("0xa", "A", 1, volume_1m=5000, smart_degen=5, liquidity=100_000)
+    token.also_in_1h = True
+    scored = scorer.score(token, None, None)
+    assert scored.breakdown["timeframe"] == 10
+
+
+def test_score_timeframe_not_confirmed() -> None:
+    scorer = AlphaScorer()
+    token = _token("0xa", "A", 1, volume_1m=5000, smart_degen=5, liquidity=100_000)
+    scored = scorer.score(token, None, None)
+    assert scored.breakdown["timeframe"] == 0
+
+
 def test_detect_custom_thresholds() -> None:
     scorer = AlphaScorer(min_liquidity=0, score_high=50, score_medium=40, score_low=30)
     prev = _snapshot([_token("0xa", "A", 30, volume_1m=50_000, smart_degen=5, liquidity=100_000)])

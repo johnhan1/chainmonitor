@@ -153,7 +153,7 @@ class AlphaScorer:
         breakdown["structure"] = struct_score
 
         # 多时间帧确认 (max 10)
-        tf_score = 0
+        tf_score = 10 if token.also_in_1h else 0
         breakdown["timeframe"] = tf_score
 
         # 风险折价 (max -10)
