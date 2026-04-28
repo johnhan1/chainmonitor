@@ -176,6 +176,29 @@ def test_detect_low_score_skipped() -> None:
     assert signals == []
 
 
+def test_score_volume_acceleration() -> None:
+    scorer = AlphaScorer()
+    prev = _token("0xa", "A", 1, volume_1m=1000, smart_degen=5, liquidity=100_000)
+    curr = _token("0xa", "A", 1, volume_1m=5000, smart_degen=5, liquidity=100_000)
+    scored = scorer.score(curr, prev, None)
+    assert scored.breakdown["volume_acceleration"] == 15  # 5x > 3x threshold
+
+
+def test_score_no_volume_accel_without_prev() -> None:
+    scorer = AlphaScorer()
+    curr = _token("0xa", "A", 1, volume_1m=5000, smart_degen=5, liquidity=100_000)
+    scored = scorer.score(curr, None, None)
+    assert scored.breakdown["volume_acceleration"] == 0
+
+
+def test_score_rank_momentum_40_plus() -> None:
+    scorer = AlphaScorer()
+    prev = _token("0xa", "A", 50, volume_1m=5000, smart_degen=5, liquidity=100_000)
+    curr = _token("0xa", "A", 1, volume_1m=5000, smart_degen=5, liquidity=100_000)
+    scored = scorer.score(curr, prev, None)
+    assert scored.breakdown["rank_momentum"] == 25
+
+
 def test_detect_custom_thresholds() -> None:
     scorer = AlphaScorer(min_liquidity=0, score_high=50, score_medium=40, score_low=30)
     prev = _snapshot([_token("0xa", "A", 30, volume_1m=50_000, smart_degen=5, liquidity=100_000)])

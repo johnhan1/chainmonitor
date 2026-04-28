@@ -80,11 +80,13 @@ class AlphaScorer:
                 smart_score = max(smart_score, 10)
         breakdown["smart_money"] = smart_score
 
-        # 排名加速度 (max 20)
+        # 排名加速度 (max 25)
         rank_score = 0
         if prev and prev.rank != token.rank:
             change = prev.rank - token.rank
-            if change >= 20:
+            if change >= 40:
+                rank_score = 25
+            elif change >= 20:
                 rank_score = 20
             elif change >= 10:
                 rank_score = 15
@@ -109,6 +111,18 @@ class AlphaScorer:
         if vol_score == 0 and token.volume_1m and token.volume_1m > 0:
             vol_score = 5
         breakdown["volume_quality"] = vol_score
+
+        # 成交量加速度 (max 15)
+        accel_score = 0
+        if prev and token.volume_1m and prev.volume_1m and prev.volume_1m > 0:
+            accel = token.volume_1m / prev.volume_1m
+            if accel > 3:
+                accel_score = 15
+            elif accel > 2:
+                accel_score = 10
+            elif accel > 1.5:
+                accel_score = 5
+        breakdown["volume_acceleration"] = accel_score
 
         # 结构健康度 (max 15)
         struct_score = 10
