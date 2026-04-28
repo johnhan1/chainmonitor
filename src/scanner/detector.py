@@ -22,12 +22,18 @@ class AlphaScorer:
         max_bundler_rat_ratio: float = 0.7,
         surge_threshold: int = 10,
         spike_ratio: float = 2.0,
+        score_high: int = 75,
+        score_medium: int = 65,
+        score_low: int = 55,
     ) -> None:
         self._min_liquidity = min_liquidity
         self._max_rug_risk = max_rug_risk
         self._max_bundler_rat_ratio = max_bundler_rat_ratio
         self._surge_threshold = surge_threshold
         self._spike_ratio = spike_ratio
+        self._score_high = score_high
+        self._score_medium = score_medium
+        self._score_low = score_low
 
     def hard_filter(self, token: TrendingToken, risk: TokenRisk | None) -> FilterResult:
         if token.liquidity is not None and token.liquidity < self._min_liquidity:
@@ -171,11 +177,11 @@ class AlphaScorer:
             prev_token = prev_map.get(token.address)
             scored = self.score(token, prev_token, risk)
 
-            if scored.score >= 75:
+            if scored.score >= self._score_high:
                 level = "HIGH"
-            elif scored.score >= 65:
+            elif scored.score >= self._score_medium:
                 level = "MEDIUM"
-            elif scored.score >= 55:
+            elif scored.score >= self._score_low:
                 level = "OBSERVE"
             else:
                 continue

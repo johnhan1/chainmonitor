@@ -174,3 +174,12 @@ def test_detect_low_score_skipped() -> None:
     curr = _snapshot([_token("0xa", "A", 50, liquidity=100_000)])
     signals = scorer.detect(prev, curr)
     assert signals == []
+
+
+def test_detect_custom_thresholds() -> None:
+    scorer = AlphaScorer(min_liquidity=0, score_high=50, score_medium=40, score_low=30)
+    prev = _snapshot([_token("0xa", "A", 30, volume_1m=50_000, smart_degen=5, liquidity=100_000)])
+    curr = _snapshot([_token("0xa", "A", 1, volume_1m=50_000, smart_degen=10, liquidity=100_000)])
+    signals = scorer.detect(prev, curr)
+    assert len(signals) > 0
+    assert signals[0].level == "HIGH"

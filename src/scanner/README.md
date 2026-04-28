@@ -183,6 +183,7 @@ OBSERVE 和 MEDIUM 都推送，但没有频率差异控制（目前）。
 | `CM_SCANNER_SCORE_LOW_THRESHOLD` | 55 | OBSERVE 阈值 |
 | `CM_SCANNER_COOLDOWN_HIGH_SECONDS` | 900 | HIGH 冷却 (秒) |
 | `CM_SCANNER_COOLDOWN_MEDIUM_SECONDS` | 1800 | MEDIUM/OBSERVE 冷却 (秒) |
+| `CM_SCANNER_METRICS_PORT` | 9101 | Scanner Prometheus metrics HTTP server port |
 | `CM_SCANNER_ENABLED` | false | Scanner 总开关 |
 | `CM_SCANNER_CHAINS` | "sol,bsc,base,eth" | 监控链列表 |
 | `CM_SCANNER_SURGE_THRESHOLD` | 10 | 排名跃升阈值（硬过滤用） |
@@ -209,6 +210,38 @@ OBSERVE 和 MEDIUM 都推送，但没有频率差异控制（目前）。
   成交额(1m): $45.2K
   市值: $1.2M
 ```
+
+## 可观测性
+
+### 结构化日志
+
+Scanner 在 pipeline 各环节输出 JSON 结构化事件日志，每条日志的 `message` 字段标识事件类型：
+
+| 事件 | 触发点 | 说明 |
+|------|--------|------|
+| `ChainScanStarted` | 链扫描开始 | chain, interval, timestamp |
+| `TrendingFetched` | trending API 返回 | token_count, duration_ms, success |
+| `TokenSecurityChecked` | 安全查询完成 | address, duration_ms, success |
+| `TokenFiltered` | 硬过滤判定 | address, passed, reason |
+| `TokenScored` | 评分完成 | address, total_score, breakdown |
+| `SignalEmitted` | 信号推送 | address, level, score |
+| `CooldownSkipped` | 冷却跳过 | address, symbol |
+| `ChainScanCompleted` | 链扫描结束 | total_duration_ms, token_count, signal_count |
+
+### Prometheus 指标
+
+Scanner 在 `CM_SCANNER_METRICS_PORT`（默认 9101）暴露 `/metrics` 端点：
+
+| 指标 | 类型 | 说明 |
+|------|------|------|
+| `cm_scanner_chain_duration_seconds` | Histogram | 每链扫描耗时 |
+| `cm_scanner_trending_duration_seconds` | Histogram | trending API 调用耗时 |
+| `cm_scanner_trending_tokens_total` | Counter | 获取的代币总数 |
+| `cm_scanner_security_check_duration_seconds` | Histogram | 安全查询耗时 |
+| `cm_scanner_security_checks_total` | Counter | 安全查询结果 (ok/fail) |
+| `cm_scanner_filter_rejections_total` | Counter | 硬过滤拦截原因分布 |
+| `cm_scanner_signals_total` | Counter | 信号等级分布 |
+| `cm_scanner_score` | Histogram | 评分分布 |
 
 ## 已知问题
 

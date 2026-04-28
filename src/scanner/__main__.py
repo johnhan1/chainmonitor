@@ -4,6 +4,7 @@ import asyncio
 import logging
 import signal
 
+from src.scanner.cooldown import CooldownManager
 from src.scanner.detector import AlphaScorer
 from src.scanner.gmgn_client import GmgnClient
 from src.scanner.notifier import TelegramNotifier
@@ -29,6 +30,21 @@ async def main() -> None:
         logger.warning("Scanner enabled but TELEGRAM_BOT_TOKEN or CHAT_ID missing")
         return
 
+    # Observability
+    from src.scanner.events import EVENT_TYPES, EventBus
+    from src.scanner.handlers import MetricsHandler, StructuredLogHandler
+    from src.scanner.metrics import ScannerMetrics, start_metrics_server
+
+    event_bus = EventBus()
+    log_handler = StructuredLogHandler()
+    metrics_handler = MetricsHandler(ScannerMetrics())
+    for et in EVENT_TYPES:
+        event_bus.subscribe(et, log_handler)
+        event_bus.subscribe(et, metrics_handler)
+
+    start_metrics_server(settings.scanner_metrics_port)
+    logger.info("Scanner metrics server started on port %d", settings.scanner_metrics_port)
+
     client = GmgnClient(
         gmgn_cli_path=settings.gmgn_cli_path,
         api_key=settings.gmgn_api_key,
@@ -38,18 +54,27 @@ async def main() -> None:
         min_liquidity=settings.scanner_min_liquidity,
         max_rug_risk=settings.scanner_max_rug_risk,
         max_bundler_rat_ratio=settings.scanner_max_bundler_rat_ratio,
+        score_high=settings.scanner_score_high_threshold,
+        score_medium=settings.scanner_score_medium_threshold,
+        score_low=settings.scanner_score_low_threshold,
     )
     notifier = TelegramNotifier(bot_token=bot_token, chat_id=chat_id)
+
+    cooldown = CooldownManager(
+        cooldown_high_seconds=settings.scanner_cooldown_high_seconds,
+        cooldown_medium_seconds=settings.scanner_cooldown_medium_seconds,
+    )
+
     orch = ScannerOrchestrator(
         chains=list(settings.scanner_chains),
         client=client,
         store=store,
         scorer=scorer,
         notifier=notifier,
+        event_bus=event_bus,
+        cooldown=cooldown,
         trending_limit=settings.scanner_trending_limit,
         interval_1h_seconds=settings.scanner_interval_1h_seconds,
-        cooldown_high_seconds=settings.scanner_cooldown_high_seconds,
-        cooldown_medium_seconds=settings.scanner_cooldown_medium_seconds,
     )
 
     logger.info(
