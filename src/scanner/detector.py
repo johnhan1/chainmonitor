@@ -34,6 +34,8 @@ class AlphaScorer:
         self._score_high = score_high
         self._score_medium = score_medium
         self._score_low = score_low
+        self._score_histogram: list[int] = [0] * 11  # buckets: 0,10,20,...,100
+        self._score_histogram_scanned: int = 0
 
     def hard_filter(self, token: TrendingToken, risk: TokenRisk | None) -> FilterResult:
         if token.liquidity is not None and token.liquidity < self._min_liquidity:
@@ -220,5 +222,19 @@ class AlphaScorer:
                     detected_at=curr.taken_at,
                 )
             )
+
+        self._score_histogram_scanned += len(curr.tokens)
+        for sig in signals:
+            bucket = min(sig.token.score // 10, 10)
+            self._score_histogram[bucket] += 1
+        if self._score_histogram_scanned >= 100:
+            buckets_str = ",".join(str(b) for b in self._score_histogram)
+            logger.info(
+                "Score histogram (n=%d): [%s]",
+                self._score_histogram_scanned,
+                buckets_str,
+            )
+            self._score_histogram = [0] * 11
+            self._score_histogram_scanned = 0
 
         return signals
