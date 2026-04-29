@@ -7,8 +7,18 @@ import os
 import sys
 
 from src.scanner.models import TokenRisk, TrendingToken
+from src.shared.resilience.executor import ResilienceConfig, ResilientExecutor
 
 logger = logging.getLogger(__name__)
+
+
+class ConcurrencyLimiter:
+    def __init__(self, max_concurrent: int) -> None:
+        self._semaphore = asyncio.Semaphore(max(1, max_concurrent))
+
+    async def run(self, coro_factory):
+        async with self._semaphore:
+            return await coro_factory()
 
 
 class GmgnClient:
@@ -16,17 +26,65 @@ class GmgnClient:
         self,
         gmgn_cli_path: str = "gmgn-cli",
         api_key: str = "",
-        cmd_timeout_seconds: float = 30.0,
+        trending_timeout_seconds: float = 30.0,
+        security_timeout_seconds: float = 15.0,
+        rate_limit_per_second: float = 2.0,
+        rate_limit_capacity: int = 5,
+        circuit_failure_threshold: int = 5,
+        circuit_recovery_seconds: float = 30.0,
+        circuit_half_open_max_calls: int = 2,
+        retry_attempts: int = 3,
+        retry_base_seconds: float = 1.0,
+        retry_max_seconds: float = 30.0,
+        security_max_concurrency: int = 5,
     ) -> None:
         self._cli_path = gmgn_cli_path
         self._api_key = api_key
-        self._timeout = cmd_timeout_seconds
+        self._trending_timeout = trending_timeout_seconds
+        self._security_timeout = security_timeout_seconds
+
+        def _is_retryable(e: Exception) -> bool:
+            return isinstance(e, TimeoutError | OSError)
+
+        base_config = ResilienceConfig(
+            rate_limit_per_second=rate_limit_per_second,
+            rate_limit_capacity=rate_limit_capacity,
+            circuit_failure_threshold=circuit_failure_threshold,
+            circuit_recovery_seconds=circuit_recovery_seconds,
+            circuit_half_open_max_calls=circuit_half_open_max_calls,
+            retry_attempts=retry_attempts,
+            retry_base_seconds=retry_base_seconds,
+            retry_max_seconds=retry_max_seconds,
+            backoff_base_seconds=retry_base_seconds,
+            backoff_max_seconds=retry_max_seconds,
+        )
+        self._trending_executor = ResilientExecutor(
+            name="gmgn_trending",
+            config=base_config,
+            is_retryable=_is_retryable,
+        )
+        self._security_executor = ResilientExecutor(
+            name="gmgn_security",
+            config=base_config,
+            is_retryable=_is_retryable,
+        )
+        self._concurrency_limiter = ConcurrencyLimiter(max_concurrent=security_max_concurrency)
 
     async def fetch_trending(
         self,
         chain: str,
         interval: str,
         limit: int = 50,
+    ) -> list[TrendingToken]:
+        return await self._trending_executor.execute(
+            lambda: self._do_fetch_trending(chain, interval, limit)
+        )
+
+    async def _do_fetch_trending(
+        self,
+        chain: str,
+        interval: str,
+        limit: int,
     ) -> list[TrendingToken]:
         env = dict(os.environ)
         if self._api_key:
@@ -64,7 +122,9 @@ class GmgnClient:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=self._trending_timeout
+            )
             if proc.returncode != 0:
                 logger.error(
                     "gmgn-cli failed (exit=%d) stderr=%s stdout=%s",
@@ -75,7 +135,7 @@ class GmgnClient:
                 return []
         except (TimeoutError, OSError) as e:
             logger.error("gmgn-cli error: %s", e)
-            return []
+            raise
 
         try:
             data = json.loads(stdout)
@@ -116,6 +176,13 @@ class GmgnClient:
         return result
 
     async def fetch_token_security(self, chain: str, address: str) -> TokenRisk | None:
+        return await self._concurrency_limiter.run(
+            lambda: self._security_executor.execute(
+                lambda: self._do_fetch_token_security(chain, address)
+            )
+        )
+
+    async def _do_fetch_token_security(self, chain: str, address: str) -> TokenRisk | None:
         cmd = [
             self._cli_path,
             "token",
@@ -145,8 +212,15 @@ class GmgnClient:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=self._security_timeout
+            )
             if proc.returncode != 0:
+                logger.error(
+                    "gmgn-cli security failed (exit=%d) stderr=%s",
+                    proc.returncode,
+                    stderr.decode()[:500],
+                )
                 return None
             data = json.loads(stdout)
             inner = data.get("data", {}) if isinstance(data, dict) else data
@@ -162,7 +236,7 @@ class GmgnClient:
             )
         except (json.JSONDecodeError, TimeoutError, OSError) as e:
             logger.warning("fetch_token_security failed for %s: %s", address, e)
-            return None
+            raise
 
 
 def _safe_float(d: dict, key: str) -> float | None:
