@@ -138,6 +138,19 @@ class Settings(BaseSettings):
     scanner_cooldown_observe_seconds: int = 300
     scanner_metrics_port: int = 9101
 
+    # Scanner resilience
+    scanner_rate_limit_per_second: float = 2.0
+    scanner_rate_limit_capacity: int = 5
+    scanner_circuit_failure_threshold: int = 5
+    scanner_circuit_recovery_seconds: float = 30.0
+    scanner_circuit_half_open_max_calls: int = 2
+    scanner_retry_attempts: int = 3
+    scanner_retry_base_seconds: float = 1.0
+    scanner_retry_max_seconds: float = 30.0
+    scanner_trending_timeout_seconds: float = 30.0
+    scanner_security_timeout_seconds: float = 15.0
+    scanner_security_max_concurrency: int = 5
+
     model_config = SettingsConfigDict(
         env_file=(".env", f".env.{_app_env}"),
         env_file_encoding="utf-8",

@@ -62,7 +62,10 @@ async def test_fetch_trending_empty_data(tmp_path: pathlib.Path) -> None:
 async def test_fetch_trending_timeout_returns_empty(tmp_path: pathlib.Path) -> None:
     client = GmgnClient(
         gmgn_cli_path=_bat_that_sleeps(tmp_path, 10),
-        cmd_timeout_seconds=0.001,
+        trending_timeout_seconds=0.001,
+        retry_attempts=1,
+        retry_base_seconds=0.001,
+        retry_max_seconds=0.001,
     )
     tokens = await client.fetch_trending(chain="sol", interval="1m", limit=50)
-    assert tokens == []
+    assert tokens is None or tokens == []

@@ -63,6 +63,17 @@ async def main() -> None:
     client = GmgnClient(
         gmgn_cli_path=settings.gmgn_cli_path,
         api_key=settings.gmgn_api_key,
+        trending_timeout_seconds=settings.scanner_trending_timeout_seconds,
+        security_timeout_seconds=settings.scanner_security_timeout_seconds,
+        rate_limit_per_second=settings.scanner_rate_limit_per_second,
+        rate_limit_capacity=settings.scanner_rate_limit_capacity,
+        circuit_failure_threshold=settings.scanner_circuit_failure_threshold,
+        circuit_recovery_seconds=settings.scanner_circuit_recovery_seconds,
+        circuit_half_open_max_calls=settings.scanner_circuit_half_open_max_calls,
+        retry_attempts=settings.scanner_retry_attempts,
+        retry_base_seconds=settings.scanner_retry_base_seconds,
+        retry_max_seconds=settings.scanner_retry_max_seconds,
+        security_max_concurrency=settings.scanner_security_max_concurrency,
     )
     store = SnapshotStore(get_engine())
     scorer = AlphaScorer(
