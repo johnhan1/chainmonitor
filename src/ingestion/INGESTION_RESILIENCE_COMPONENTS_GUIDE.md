@@ -1,24 +1,24 @@
 # Ingestion 韧性组件详解
 
-本文档面向 `src/ingestion/resilience/` 下拆分后的韧性模块，详细说明采集层组件职责、执行时机、行为语义与观测指标。
+本文档说明采集层韧性组件职责、执行时机、行为语义与观测指标。通用原语（限流器、熔断器、退避守卫）统一存放于 `src/shared/resilience/`，ingestion 特有的编排与观测逻辑位于 `src/ingestion/resilience/`。
 
 ## 1. 韧性体系总览
 
 当前采集层韧性能力由四层组成：
 
-1. 原语层（基础控制件）
+1. 原语层（基础控制件）— `src/shared/resilience/`
 - `AsyncTokenBucket`：控制请求速率，防止打爆上游与本地资源。
 - `AsyncCircuitBreaker`：在连续失败后短路请求，避免故障放大。
+- `BackoffGuard` / `BackoffRegistry`：provider 级退避保护，基于字符串 name 共享。
 
-2. 策略层（可复用策略）
+2. 策略层（可复用策略）— `src/ingestion/resilience/`
 - `RetryPolicy`：重试判定、错误归因、`Retry-After` 解析、退避时间计算。
 
 3. 基础设施层（并发与缓存）
 - `SingleFlightGroup`：同 URL 并发去重。
 - `ResponseCacheStore`：进程内缓存 + Redis 二级缓存。
-- `RateLimiterRegistry`：进程内共享 `provider+chain` 令牌桶。
-- `CircuitBreakerRegistry`：进程内共享 `provider+chain+endpoint` 熔断器。
-- `ProviderBackoffRegistry`：进程内共享 provider 级退避保护。
+- `RateLimiterRegistry`（shared）：进程内共享 name 级令牌桶。
+- `CircuitBreakerRegistry`（shared）：进程内共享 name 级熔断器。
 
 4. 执行与观测层
 - `ResilientHttpClient`：统一请求编排器，串联所有韧性能力。
@@ -193,7 +193,7 @@
 - 请求成功调用 `record_success()`，失败调用 `record_failure()`。
 
 ### D.1 Provider 级退避保护
-- 通过 `ProviderBackoffRegistry` 共享 `provider+chain` 退避状态。
+- 通过 `BackoffRegistry`（`src/shared/resilience/backoff.py`）共享 `{provider}.{chain}` 退避状态。
 - 连续失败时对 provider 整体做短时退避，避免多 endpoint 同时压测上游。
 
 ### E. singleflight（同 URL 去重）
@@ -249,8 +249,8 @@
 
 ## 5. 组件关系与边界
 
-- `rate_limiter.py`、`circuit_breaker.py` 提供可复用控制原语。
-- `retry_policy.py`、`singleflight.py`、`cache_store.py`、`metrics.py` 提供独立能力组件。
+- `src/shared/resilience/` 下的 `AsyncTokenBucket`、`AsyncCircuitBreaker`、`BackoffGuard` 提供可复用控制原语。
+- `src/ingestion/resilience/` 下的 `retry_policy.py`、`singleflight.py`、`cache_store.py`、`metrics.py` 提供独立能力组件。
 - `resilient_http_client.py` 仅做请求编排与生命周期管理。
 - 数据源 adapter/strategy 只应该调用 `ResilientHttpClient.get_json()`，不要重复实现重试、熔断、缓存逻辑。
 

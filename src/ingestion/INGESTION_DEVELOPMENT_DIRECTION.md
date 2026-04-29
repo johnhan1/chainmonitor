@@ -135,7 +135,8 @@
 
 ## 6.1 已完成（当前可用）
 
-- 组件拆分：`rate_limiter/circuit_breaker/retry_policy/singleflight/cache_store/metrics`
+- 通用原语提取到 `src/shared/resilience/`（`AsyncTokenBucket`、`AsyncCircuitBreaker`、`BackoffGuard`、`ResilientExecutor`）
+- ingestion 特有组件：`retry_policy/singleflight/cache_store/metrics`
 - provider 维度指标
 - provider+chain 维度限流配置
 - provider 维度缓存 key 隔离

@@ -143,17 +143,8 @@
 
 #### `src/ingestion/resilience/__init__.py`
 
-- 导出 `AsyncTokenBucket`、`AsyncCircuitBreaker`、`ResilientHttpClient`
-
-#### `src/ingestion/resilience/rate_limiter.py`
-
-- 定义 `AsyncTokenBucket` 令牌桶限流器
-- 负责请求前节流与突发流量平滑
-
-#### `src/ingestion/resilience/circuit_breaker.py`
-
-- 定义 `AsyncCircuitBreaker` 熔断器状态机（closed/open/half\_open）
-- 负责故障窗口短路与恢复探测
+- 导出 `ResilientHttpClient`
+- 韧性原语（`AsyncTokenBucket`、`AsyncCircuitBreaker`、`BackoffGuard`、`RateLimiterRegistry`、`CircuitBreakerRegistry`）统一存放于 `src/shared/resilience/`，ingestion 直接引用
 
 #### `src/ingestion/resilience/singleflight.py`
 
@@ -178,7 +169,7 @@
 #### `src/ingestion/resilience/resilient_http_client.py`
 
 - 定义薄编排器 `ResilientHttpClient`
-- 统一调度 `rate_limiter`、`circuit_breaker`、`retry_policy`、`singleflight`、`cache_store`、`metrics`
+- 统一调度 `AsyncTokenBucket`（shared）、`AsyncCircuitBreaker`（shared）、`BackoffGuard`（shared）、`retry_policy`、`singleflight`、`cache_store`、`metrics`
 - 对 adapter 暴露统一 `get_json(...)` 接口，避免策略层重复实现请求链路
 
 ### 3.6 `services/`
