@@ -71,7 +71,7 @@ class AsyncCircuitBreaker:
 
 class CircuitBreakerRegistry:
     _lock = Lock()
-    _breakers: dict[tuple[str], AsyncCircuitBreaker] = {}
+    _breakers: dict[str, AsyncCircuitBreaker] = {}
 
     @classmethod
     def get_breaker(
@@ -81,7 +81,7 @@ class CircuitBreakerRegistry:
         recovery_seconds: float,
         half_open_max_calls: int,
     ) -> AsyncCircuitBreaker:
-        key = (name.strip().lower(),)
+        key = name.strip().lower()
         normalized_threshold = max(1, int(failure_threshold))
         normalized_recovery = max(0.5, float(recovery_seconds))
         normalized_half_open = max(1, int(half_open_max_calls))
