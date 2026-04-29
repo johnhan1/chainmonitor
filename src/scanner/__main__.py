@@ -31,16 +31,31 @@ async def main() -> None:
         return
 
     # Observability
-    from src.scanner.events import ALL_EVENT_TYPES, EventBus
-    from src.scanner.handlers import MetricsHandler, StructuredLogHandler
+    from src.scanner.events import STRATEGY_EVENT_TYPES, SYSTEM_EVENT_TYPES, EventBus
+    from src.scanner.handlers import (
+        DatabaseEventHandler,
+        FileEventHandler,
+        MetricsHandler,
+        StructuredLogHandler,
+    )
     from src.scanner.metrics import ScannerMetrics, start_metrics_server
 
     event_bus = EventBus()
-    log_handler = StructuredLogHandler()
-    metrics_handler = MetricsHandler(ScannerMetrics())
-    for et in ALL_EVENT_TYPES:
-        event_bus.subscribe(et, log_handler)
+    metrics = ScannerMetrics()
+    metrics_handler = MetricsHandler(metrics)
+
+    for et in SYSTEM_EVENT_TYPES:
         event_bus.subscribe(et, metrics_handler)
+
+    log_handler = StructuredLogHandler()
+    engine = get_engine()
+    db_handler = DatabaseEventHandler(engine=engine)
+    file_handler = FileEventHandler()
+
+    for et in STRATEGY_EVENT_TYPES:
+        event_bus.subscribe(et, log_handler)
+        event_bus.subscribe(et, db_handler)
+        event_bus.subscribe(et, file_handler)
 
     start_metrics_server(settings.scanner_metrics_port)
     logger.info("Scanner metrics server started on port %d", settings.scanner_metrics_port)

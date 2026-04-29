@@ -9,17 +9,13 @@ from src.scanner.cooldown import CooldownManager
 from src.scanner.detector import AlphaScorer
 from src.scanner.events import (
     ChainScanCompleted,
-    ChainScanStarted,
-    CooldownSkipped,
     EventBus,
-    SignalEmitted,
-    TokenFiltered,
-    TokenScored,
+    TokenProcessed,
     TokenSecurityChecked,
     TrendingFetched,
 )
 from src.scanner.gmgn_client import GmgnClient
-from src.scanner.models import Snapshot, TokenRisk, TrendingToken
+from src.scanner.models import AlphaSignal, Snapshot, TokenRisk, TrendingToken
 from src.scanner.notifier import TelegramNotifier
 from src.scanner.snapshot_store import SnapshotStore
 
@@ -79,7 +75,6 @@ class ScannerOrchestrator:
 
     async def _run_chain(self, chain: str, interval: str) -> None:
         t0 = self._clock()
-        self._event_bus.publish(ChainScanStarted(chain=chain, interval=interval, timestamp=t0))
 
         tokens = await self._client.fetch_trending(
             chain=chain, interval=interval, limit=self._trending_limit
@@ -141,6 +136,7 @@ class ScannerOrchestrator:
                 logger.exception("Security check failed for %s", addr)
 
         signals = self._scorer.detect(prev, curr, risks)
+        signal_map: dict[str, AlphaSignal] = {s.token.token.address: s for s in signals}
 
         prev_map: dict[str, TrendingToken] = {}
         if prev:
@@ -149,85 +145,62 @@ class ScannerOrchestrator:
         for token in curr.tokens:
             risk = risks.get(token.address)
             fr = self._scorer.hard_filter(token, risk)
-            self._event_bus.publish(
-                TokenFiltered(
-                    chain=chain,
-                    address=token.address,
-                    symbol=token.symbol,
-                    passed=fr.passed,
-                    reason=fr.reason,
-                )
-            )
+
+            score_total: int | None = None
+            score_breakdown: dict[str, int] | None = None
             if fr.passed:
                 prev_token = prev_map.get(token.address)
                 scored = self._scorer.score(token, prev_token, risk)
-                self._event_bus.publish(
-                    TokenScored(
-                        chain=chain,
-                        address=token.address,
-                        symbol=token.symbol,
-                        total_score=scored.score,
-                        breakdown=scored.breakdown,
-                        passed_filters=True,
-                        filter_reason="",
-                    )
-                )
-            else:
-                self._event_bus.publish(
-                    TokenScored(
-                        chain=chain,
-                        address=token.address,
-                        symbol=token.symbol,
-                        total_score=0,
-                        breakdown={},
-                        passed_filters=False,
-                        filter_reason=fr.reason,
-                    )
-                )
+                score_total = scored.score
+                score_breakdown = scored.breakdown
 
-        for sig in signals:
-            addr = sig.token.token.address
-            if self._cooldown.is_cooling(addr):
-                self._event_bus.publish(
-                    CooldownSkipped(
-                        chain=chain,
-                        address=addr,
-                        symbol=sig.token.token.symbol,
-                    )
-                )
-                logger.debug("Cooldown skip %s (%s)", sig.token.token.symbol, addr)
-                continue
+            signal_emitted = False
+            signal_level: str | None = None
+            cooldown_skipped = False
 
-            # Apply decay for repeat signals
-            decay = self._cooldown.decay_factor(addr)
-            if decay < 1.0:
-                sig.token.score = int(sig.token.score * decay)
-                sig.token.breakdown = {}
-                logger.info(
-                    "Decayed signal for %s: factor=%.1f score=%d",
-                    sig.token.token.symbol,
-                    decay,
-                    sig.token.score,
-                )
+            sig = signal_map.get(token.address)
+            if sig:
+                if self._cooldown.is_cooling(token.address):
+                    cooldown_skipped = True
+                    logger.debug("Cooldown skip %s (%s)", token.symbol, token.address)
+                else:
+                    signal_emitted = True
+                    signal_level = sig.level
+                    decay = self._cooldown.decay_factor(token.address)
+                    if decay < 1.0:
+                        score_total = int((score_total or 0) * decay)
+                        logger.info(
+                            "Decayed signal for %s: factor=%.1f score=%d",
+                            token.symbol,
+                            decay,
+                            score_total,
+                        )
+                    logger.info(
+                        "AlphaSignal level=%s score=%d chain=%s symbol=%s",
+                        signal_level,
+                        score_total or 0,
+                        chain,
+                        token.symbol,
+                    )
+                    await self._notifier.send_alpha(sig)
+                    self._cooldown.mark(token.address, signal_level)
 
             self._event_bus.publish(
-                SignalEmitted(
+                TokenProcessed(
                     chain=chain,
-                    address=addr,
-                    symbol=sig.token.token.symbol,
-                    level=sig.level,
-                    score=sig.token.score,
+                    interval=interval,
+                    scanned_at=t0,
+                    address=token.address,
+                    symbol=token.symbol,
+                    filter_passed=fr.passed,
+                    filter_reason=fr.reason,
+                    score_total=score_total,
+                    score_breakdown=score_breakdown,
+                    signal_emitted=signal_emitted,
+                    signal_level=signal_level,
+                    cooldown_skipped=cooldown_skipped,
                 )
             )
-            logger.info(
-                "AlphaSignal level=%s score=%d chain=%s symbol=%s",
-                sig.level,
-                sig.token.score,
-                chain,
-                sig.token.token.symbol,
-            )
-            await self._notifier.send_alpha(sig)
-            self._cooldown.mark(addr, sig.level)
 
         self._store.save(chain, interval, curr)
 

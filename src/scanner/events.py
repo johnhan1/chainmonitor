@@ -10,49 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class ChainScanStarted:
-    chain: str
-    interval: str
-    timestamp: datetime
-
-
-@dataclass
-class CooldownSkipped:
-    chain: str
-    address: str
-    symbol: str
-
-
-@dataclass
-class SignalEmitted:
-    chain: str
-    address: str
-    symbol: str
-    level: str
-    score: int
-
-
-@dataclass
-class TokenFiltered:
-    chain: str
-    address: str
-    symbol: str
-    passed: bool
-    reason: str
-
-
-@dataclass
-class TokenScored:
-    chain: str
-    address: str
-    symbol: str
-    total_score: int
-    breakdown: dict[str, int]
-    passed_filters: bool
-    filter_reason: str
-
-
-@dataclass
 class TrendingFetched:
     chain: str
     interval: str
@@ -98,13 +55,8 @@ class ChainScanCompleted:
 EventHandler = Callable[[Any], None]
 
 SYSTEM_EVENT_TYPES: list[type] = [
-    ChainScanStarted,
     TrendingFetched,
     TokenSecurityChecked,
-    TokenFiltered,
-    TokenScored,
-    CooldownSkipped,
-    SignalEmitted,
     ChainScanCompleted,
 ]
 

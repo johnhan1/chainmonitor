@@ -135,21 +135,15 @@ async def test_run_cycle_emits_events() -> None:
 
     from src.scanner.events import (
         ChainScanCompleted,
-        ChainScanStarted,
         EventBus,
-        SignalEmitted,
-        TokenFiltered,
-        TokenScored,
+        TokenProcessed,
         TrendingFetched,
     )
 
     received: list[object] = []
     bus = EventBus()
-    bus.subscribe(ChainScanStarted, received.append)
+    bus.subscribe(TokenProcessed, received.append)
     bus.subscribe(TrendingFetched, received.append)
-    bus.subscribe(TokenFiltered, received.append)
-    bus.subscribe(TokenScored, received.append)
-    bus.subscribe(SignalEmitted, received.append)
     bus.subscribe(ChainScanCompleted, received.append)
 
     orch = ScannerOrchestrator(
@@ -163,12 +157,13 @@ async def test_run_cycle_emits_events() -> None:
     await orch.run_cycle()
 
     event_types = [type(e).__name__ for e in received]
-    assert "ChainScanStarted" in event_types
+    assert "TokenProcessed" in event_types
     assert "TrendingFetched" in event_types
-    assert "TokenFiltered" in event_types
-    assert "TokenScored" in event_types
-    assert "SignalEmitted" in event_types
     assert "ChainScanCompleted" in event_types
+    tp = next(e for e in received if isinstance(e, TokenProcessed))
+    assert tp.address == "0xa"
+    assert tp.filter_passed is True
+    assert tp.signal_emitted is True
 
 
 @pytest.mark.asyncio
