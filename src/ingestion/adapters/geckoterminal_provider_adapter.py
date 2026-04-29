@@ -11,20 +11,28 @@ from src.ingestion.resilience.resilient_http_client import (
     INGEST_ERROR_TOTAL,
     ResilientHttpClient,
 )
-from src.shared.config import Settings
+from src.shared.config.chain import ChainSettings
+from src.shared.config.ingestion import IngestionSettings
 
 logger = logging.getLogger(__name__)
 PROVIDER = "geckoterminal"
 
 
 class GeckoTerminalProviderAdapter(ProviderAdapter):
-    def __init__(self, chain_id: str, settings: Settings, http_client: ResilientHttpClient) -> None:
+    def __init__(
+        self,
+        chain_id: str,
+        settings: IngestionSettings,
+        chain_settings: ChainSettings,
+        http_client: ResilientHttpClient,
+    ) -> None:
         self._chain_id = chain_id
         self._settings = settings
+        self._chain_settings = chain_settings
         self._http_client = http_client
-        self._network = self._settings.get_geckoterminal_network(chain_id=chain_id)
-        self._api_base = self._settings.market_data_geckoterminal_api_base.rstrip("/")
-        self._max_concurrency = self._settings.get_market_data_max_concurrency(chain_id=chain_id)
+        self._network = self._chain_settings.get_geckoterminal_network(chain_id=chain_id)
+        self._api_base = self._settings.geckoterminal_api_base.rstrip("/")
+        self._max_concurrency = self._settings.get_max_concurrency(chain_id=chain_id)
 
     async def fetch_pairs_by_addresses(
         self,

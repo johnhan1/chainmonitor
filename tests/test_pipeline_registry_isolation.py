@@ -1,9 +1,9 @@
 from src.app.services.pipeline_registry import PipelineComponentRegistry
-from src.shared.config import get_settings
+from src.shared.config.chain import get_chain_settings
 
 
 def test_registry_returns_fresh_components() -> None:
-    chain_id = get_settings().supported_chains[0]
+    chain_id = get_chain_settings().supported_chains[0]
     registry = PipelineComponentRegistry()
 
     first = registry.resolve(chain_id=chain_id)

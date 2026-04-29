@@ -10,17 +10,19 @@ from src.scanner.gmgn_client import GmgnClient
 from src.scanner.notifier import TelegramNotifier
 from src.scanner.orchestrator import ScannerOrchestrator
 from src.scanner.snapshot_store import SnapshotStore
-from src.shared.config import get_settings
+from src.shared.config.app import get_app_settings
+from src.shared.config.scanner import get_scanner_settings
 from src.shared.db.session import get_engine
 from src.shared.logging import setup_logging
 
 
 async def main() -> None:
-    settings = get_settings()
-    setup_logging(settings.app_log_level)
+    app_settings = get_app_settings()
+    settings = get_scanner_settings()
+    setup_logging(app_settings.log_level)
     logger = logging.getLogger(__name__)
 
-    if not settings.scanner_enabled:
+    if not settings.enabled:
         logger.info("Scanner disabled (CM_SCANNER_ENABLED=false)")
         return
 
@@ -57,57 +59,57 @@ async def main() -> None:
         event_bus.subscribe(et, db_handler)
         event_bus.subscribe(et, file_handler)
 
-    start_metrics_server(settings.scanner_metrics_port)
-    logger.info("Scanner metrics server started on port %d", settings.scanner_metrics_port)
+    start_metrics_server(settings.metrics_port)
+    logger.info("Scanner metrics server started on port %d", settings.metrics_port)
 
     client = GmgnClient(
         gmgn_cli_path=settings.gmgn_cli_path,
         api_key=settings.gmgn_api_key,
-        trending_timeout_seconds=settings.scanner_trending_timeout_seconds,
-        security_timeout_seconds=settings.scanner_security_timeout_seconds,
-        rate_limit_per_second=settings.scanner_rate_limit_per_second,
-        rate_limit_capacity=settings.scanner_rate_limit_capacity,
-        circuit_failure_threshold=settings.scanner_circuit_failure_threshold,
-        circuit_recovery_seconds=settings.scanner_circuit_recovery_seconds,
-        circuit_half_open_max_calls=settings.scanner_circuit_half_open_max_calls,
-        retry_attempts=settings.scanner_retry_attempts,
-        retry_base_seconds=settings.scanner_retry_base_seconds,
-        retry_max_seconds=settings.scanner_retry_max_seconds,
-        security_max_concurrency=settings.scanner_security_max_concurrency,
+        trending_timeout_seconds=settings.trending_timeout_seconds,
+        security_timeout_seconds=settings.security_timeout_seconds,
+        rate_limit_per_second=settings.rate_limit_per_second,
+        rate_limit_capacity=settings.rate_limit_capacity,
+        circuit_failure_threshold=settings.circuit_failure_threshold,
+        circuit_recovery_seconds=settings.circuit_recovery_seconds,
+        circuit_half_open_max_calls=settings.circuit_half_open_max_calls,
+        retry_attempts=settings.retry_attempts,
+        retry_base_seconds=settings.retry_base_seconds,
+        retry_max_seconds=settings.retry_max_seconds,
+        security_max_concurrency=settings.security_max_concurrency,
     )
     store = SnapshotStore(get_engine())
     scorer = AlphaScorer(
-        min_liquidity=settings.scanner_min_liquidity,
-        max_rug_risk=settings.scanner_max_rug_risk,
-        max_bundler_rat_ratio=settings.scanner_max_bundler_rat_ratio,
-        score_high=settings.scanner_score_high_threshold,
-        score_medium=settings.scanner_score_medium_threshold,
-        score_low=settings.scanner_score_low_threshold,
+        min_liquidity=settings.min_liquidity,
+        max_rug_risk=settings.max_rug_risk,
+        max_bundler_rat_ratio=settings.max_bundler_rat_ratio,
+        score_high=settings.score_high_threshold,
+        score_medium=settings.score_medium_threshold,
+        score_low=settings.score_low_threshold,
     )
     notifier = TelegramNotifier(bot_token=bot_token, chat_id=chat_id)
 
     cooldown = CooldownManager(
-        cooldown_high_seconds=settings.scanner_cooldown_high_seconds,
-        cooldown_medium_seconds=settings.scanner_cooldown_medium_seconds,
-        cooldown_observe_seconds=settings.scanner_cooldown_observe_seconds,
+        cooldown_high_seconds=settings.cooldown_high_seconds,
+        cooldown_medium_seconds=settings.cooldown_medium_seconds,
+        cooldown_observe_seconds=settings.cooldown_observe_seconds,
     )
 
     orch = ScannerOrchestrator(
-        chains=list(settings.scanner_chains),
+        chains=list(settings.chains),
         client=client,
         store=store,
         scorer=scorer,
         notifier=notifier,
         event_bus=event_bus,
         cooldown=cooldown,
-        trending_limit=settings.scanner_trending_limit,
-        interval_1h_seconds=settings.scanner_interval_1h_seconds,
+        trending_limit=settings.trending_limit,
+        interval_1h_seconds=settings.interval_1h_seconds,
     )
 
     logger.info(
         "Scanner started chains=%s interval_1m=%ds",
-        settings.scanner_chains,
-        settings.scanner_interval_1m_seconds,
+        settings.chains,
+        settings.interval_1m_seconds,
     )
 
     loop = asyncio.get_running_loop()
@@ -123,9 +125,7 @@ async def main() -> None:
         except NotImplementedError:
             pass
 
-    task = asyncio.create_task(
-        orch.run_forever(interval_seconds=settings.scanner_interval_1m_seconds)
-    )
+    task = asyncio.create_task(orch.run_forever(interval_seconds=settings.interval_1m_seconds))
     await stop
     task.cancel()
     try:

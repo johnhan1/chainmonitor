@@ -8,20 +8,28 @@ from urllib.parse import quote_plus
 from src.ingestion.contracts.normalized_pair import NormalizedPair
 from src.ingestion.contracts.provider_adapter import ProviderAdapter
 from src.ingestion.resilience.resilient_http_client import INGEST_ERROR_TOTAL, ResilientHttpClient
-from src.shared.config import Settings
+from src.shared.config.chain import ChainSettings
+from src.shared.config.ingestion import IngestionSettings
 
 logger = logging.getLogger(__name__)
 PROVIDER = "birdeye"
 
 
 class BirdeyeProviderAdapter(ProviderAdapter):
-    def __init__(self, chain_id: str, settings: Settings, http_client: ResilientHttpClient) -> None:
+    def __init__(
+        self,
+        chain_id: str,
+        settings: IngestionSettings,
+        chain_settings: ChainSettings,
+        http_client: ResilientHttpClient,
+    ) -> None:
         self._chain_id = chain_id
         self._settings = settings
+        self._chain_settings = chain_settings
         self._http_client = http_client
-        self._api_base = self._settings.market_data_birdeye_api_base.rstrip("/")
-        self._birdeye_chain = self._settings.get_birdeye_chain(chain_id=chain_id)
-        self._max_concurrency = self._settings.get_market_data_max_concurrency(chain_id=chain_id)
+        self._api_base = self._settings.birdeye_api_base.rstrip("/")
+        self._birdeye_chain = self._chain_settings.get_birdeye_chain(chain_id=chain_id)
+        self._max_concurrency = self._settings.get_max_concurrency(chain_id=chain_id)
 
     async def fetch_pairs_by_addresses(
         self,

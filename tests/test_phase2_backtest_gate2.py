@@ -3,17 +3,17 @@ from datetime import UTC, datetime, timedelta
 
 from src.backtest.engine import BacktestEngine
 from src.backtest.validator import Gate2Validator
-from src.shared.config import get_settings
+from src.shared.config.chain import get_chain_settings
 from src.shared.schemas.backtest import BacktestConfig
 
 
 def _phase2_config() -> BacktestConfig:
-    settings = get_settings()
+    chain_settings = get_chain_settings()
     end = datetime(2026, 4, 18, 12, 30, tzinfo=UTC)
     start = end - timedelta(minutes=90)
     return BacktestConfig(
-        chain_id=settings.bsc_chain_id,
-        strategy_version=settings.get_strategy_version(chain_id=settings.bsc_chain_id),
+        chain_id=chain_settings.bsc_chain_id,
+        strategy_version=chain_settings.get_strategy_version(chain_id=chain_settings.bsc_chain_id),
         period_start=start,
         period_end=end,
         conviction_threshold=60.0,

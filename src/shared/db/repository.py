@@ -9,7 +9,8 @@ from time import monotonic
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
-from src.shared.config import get_settings
+from src.shared.config.pipeline import get_pipeline_settings
+from src.shared.config.postgres import get_postgres_settings
 from src.shared.schemas.backtest import BacktestConfig, BacktestMetrics
 from src.shared.schemas.pipeline import FeatureRowInput, MarketTickInput, ScoreRowInput
 
@@ -17,13 +18,14 @@ from src.shared.schemas.pipeline import FeatureRowInput, MarketTickInput, ScoreR
 class PipelineRepository:
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
-        self.settings = get_settings()
+        postgres_settings = get_postgres_settings()
+        pipeline_settings = get_pipeline_settings()
         self.pipeline_runs_table = "pipeline_runs"
-        self._statement_timeout_ms = max(1000, self.settings.postgres_statement_timeout_ms)
-        self._batch_size = max(1, self.settings.postgres_write_batch_size)
+        self._statement_timeout_ms = max(1000, postgres_settings.statement_timeout_ms)
+        self._batch_size = max(1, postgres_settings.write_batch_size)
         self._candidate_cache_ttl_seconds = max(
             0.0,
-            self.settings.pipeline_candidate_query_cache_ttl_seconds,
+            pipeline_settings.candidate_query_cache_ttl_seconds,
         )
         self._latest_candidates_cache: dict[
             tuple[str, str | None, int],

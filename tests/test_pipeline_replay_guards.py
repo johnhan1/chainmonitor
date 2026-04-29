@@ -29,8 +29,8 @@ def _reset_replay_buckets() -> None:
 
 
 def test_replay_allowlist_rejects_chain(monkeypatch) -> None:
-    monkeypatch.setattr(main.settings, "pipeline_replay_chain_allowlist", "bsc")
-    monkeypatch.setattr(main.settings, "pipeline_replay_require_api_key", False)
+    monkeypatch.setattr(main.pipeline_settings, "replay_chain_allowlist", "bsc")
+    monkeypatch.setattr(main.pipeline_settings, "replay_require_api_key", False)
     monkeypatch.setattr(main, "_get_pipeline_service", lambda chain_id: _FakePipelineService())
     _reset_replay_buckets()
     client = TestClient(main.app)
@@ -42,9 +42,9 @@ def test_replay_allowlist_rejects_chain(monkeypatch) -> None:
 
 
 def test_replay_requires_api_key(monkeypatch) -> None:
-    monkeypatch.setattr(main.settings, "pipeline_replay_chain_allowlist", "bsc")
-    monkeypatch.setattr(main.settings, "pipeline_replay_require_api_key", True)
-    monkeypatch.setattr(main.settings, "app_api_key", "secret")
+    monkeypatch.setattr(main.pipeline_settings, "replay_chain_allowlist", "bsc")
+    monkeypatch.setattr(main.pipeline_settings, "replay_require_api_key", True)
+    monkeypatch.setattr(main.app_settings, "api_key", "secret")
     monkeypatch.setattr(main, "_get_pipeline_service", lambda chain_id: _FakePipelineService())
     _reset_replay_buckets()
     client = TestClient(main.app)
@@ -56,10 +56,10 @@ def test_replay_requires_api_key(monkeypatch) -> None:
 
 
 def test_replay_rate_limit(monkeypatch) -> None:
-    monkeypatch.setattr(main.settings, "pipeline_replay_chain_allowlist", "bsc")
-    monkeypatch.setattr(main.settings, "pipeline_replay_require_api_key", False)
-    monkeypatch.setattr(main.settings, "pipeline_replay_rate_limit_per_minute", 1)
-    monkeypatch.setattr(main.settings, "pipeline_replay_rate_limit_burst", 0)
+    monkeypatch.setattr(main.pipeline_settings, "replay_chain_allowlist", "bsc")
+    monkeypatch.setattr(main.pipeline_settings, "replay_require_api_key", False)
+    monkeypatch.setattr(main.pipeline_settings, "replay_rate_limit_per_minute", 1)
+    monkeypatch.setattr(main.pipeline_settings, "replay_rate_limit_burst", 0)
     monkeypatch.setattr(main, "_get_pipeline_service", lambda chain_id: _FakePipelineService())
     _reset_replay_buckets()
     client = TestClient(main.app)

@@ -5,7 +5,7 @@ from typing import Protocol
 
 from src.feature.feature_engine import FeatureEngine
 from src.scoring.scoring_engine import ScoringEngine
-from src.shared.config import get_settings
+from src.shared.config.chain import get_chain_settings
 from src.shared.schemas.pipeline import FeatureRowInput, MarketTickInput, ScoreRowInput
 
 
@@ -30,7 +30,7 @@ class PipelineComponents:
 
 class PipelineComponentRegistry:
     def __init__(self) -> None:
-        self.settings = get_settings()
+        self.settings = get_chain_settings()
         self._supported_chains = set(self.settings.supported_chains)
 
     def resolve(self, chain_id: str) -> PipelineComponents:

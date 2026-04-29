@@ -9,8 +9,8 @@ from src.ingestion.strategies.geckoterminal_source_strategy import GeckoTerminal
 
 def test_geckoterminal_strategy_builds_market_tick(monkeypatch) -> None:
     strategy = GeckoTerminalSourceStrategy(chain_id="bsc")
-    strategy.settings.market_data_require_address_mapping_in_production = False
-    strategy.settings.market_data_required_address_symbols_by_chain = ""
+    strategy._ingestion_settings.require_address_mapping_in_production = False
+    strategy._ingestion_settings.required_address_symbols_by_chain = ""
     monkeypatch.setattr(strategy, "_symbols", lambda: ["BNB"], raising=True)
 
     async def fake_fetch_by_addresses(*args, **kwargs):  # noqa: ANN002, ANN003
@@ -57,7 +57,7 @@ def test_geckoterminal_strategy_builds_market_tick(monkeypatch) -> None:
 
 def test_geckoterminal_strategy_raises_when_required_mapping_missing(monkeypatch) -> None:
     strategy = GeckoTerminalSourceStrategy(chain_id="bsc")
-    strategy.settings.market_data_required_address_symbols_by_chain = "bsc=BNB"
+    strategy._ingestion_settings.required_address_symbols_by_chain = "bsc=BNB"
     strategy.settings.bsc_token_addresses = ""
     monkeypatch.setattr(strategy, "_symbols", lambda: ["BNB"], raising=True)
 

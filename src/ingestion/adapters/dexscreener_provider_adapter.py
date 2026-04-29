@@ -11,19 +11,27 @@ from src.ingestion.resilience.resilient_http_client import (
     INGEST_ERROR_TOTAL,
     ResilientHttpClient,
 )
-from src.shared.config import Settings
+from src.shared.config.chain import ChainSettings
+from src.shared.config.ingestion import IngestionSettings
 
 logger = logging.getLogger(__name__)
 PROVIDER = "dexscreener"
 
 
 class DexScreenerProviderAdapter(ProviderAdapter):
-    def __init__(self, chain_id: str, settings: Settings, http_client: ResilientHttpClient) -> None:
+    def __init__(
+        self,
+        chain_id: str,
+        settings: IngestionSettings,
+        chain_settings: ChainSettings,
+        http_client: ResilientHttpClient,
+    ) -> None:
         self._chain_id = chain_id
         self._settings = settings
+        self._chain_settings = chain_settings
         self._http_client = http_client
-        self._ds_chain_id = self._settings.get_dexscreener_chain_id(chain_id)
-        self._max_concurrency = self._settings.get_market_data_max_concurrency(chain_id=chain_id)
+        self._ds_chain_id = self._chain_settings.get_dexscreener_chain_id(chain_id)
+        self._max_concurrency = self._settings.get_max_concurrency(chain_id=chain_id)
 
     async def fetch_pairs_by_addresses(
         self,

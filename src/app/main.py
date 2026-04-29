@@ -12,16 +12,22 @@ from src.app.services.chain_scheduler import ChainPipelineScheduler
 from src.backtest.service import BacktestService
 from src.ingestion.contracts.errors import IngestionFetchError
 from src.ingestion.factory.source_strategy_factory import SourceStrategyFactory
-from src.shared.config import get_settings
+from src.shared.config.app import get_app_settings
+from src.shared.config.chain import get_chain_settings
+from src.shared.config.ingestion import get_ingestion_settings
+from src.shared.config.pipeline import get_pipeline_settings
 from src.shared.db import close_engine
 from src.shared.logging import setup_logging
 from src.shared.schemas.backtest import BacktestConfig
 from starlette.responses import JSONResponse, Response
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
-SourceStrategyFactory.validate_settings(settings)
-setup_logging(settings.app_log_level)
+app_settings = get_app_settings()
+chain_settings = get_chain_settings()
+ingestion_settings = get_ingestion_settings()
+pipeline_settings = get_pipeline_settings()
+SourceStrategyFactory.validate_settings(chain_settings, ingestion_settings)
+setup_logging(app_settings.log_level)
 REQUEST_COUNT = Counter("cm_http_requests_total", "Total HTTP requests", ["path", "method"])
 RATE_LIMIT_REJECTS = Counter(
     "cm_http_rate_limit_rejects_total", "Total HTTP rate-limit rejects", ["path"]
@@ -35,7 +41,7 @@ REPLAY_RATE_LIMIT_REJECTS = Counter(
 
 pipeline_services: dict[str, ChainPipelineService] = {}
 backtest_services: dict[str, BacktestService] = {}
-scheduler_chain_ids = settings.enabled_scheduler_chains
+scheduler_chain_ids = pipeline_settings.enabled_scheduler_chains
 schedulers: dict[str, ChainPipelineScheduler] = {}
 
 _RL_BUCKET: dict[str, deque[float]] = {}
@@ -49,20 +55,20 @@ _PUBLIC_PATHS = {"/healthz", "/metrics", "/docs", "/redoc", "/openapi.json"}
 
 
 def _log_runtime_config_snapshot() -> None:
-    for chain_id in settings.supported_chains:
+    for chain_id in chain_settings.supported_chains:
         logger.info(
             "runtime config chain_id=%s scheduler_enabled=%s scheduler_interval=%s scheduler_jitter=%s retry=%s concurrency=%s rate=%.3f circuit_threshold=%s circuit_recovery=%.3f min_success_ratio=%.3f min_pair_age=%s",  # noqa: E501
             chain_id,
-            settings.pipeline_scheduler_enabled,
-            settings.pipeline_scheduler_interval_seconds,
-            settings.pipeline_scheduler_startup_jitter_seconds,
-            settings.get_market_data_retry_attempts(chain_id=chain_id),
-            settings.get_market_data_max_concurrency(chain_id=chain_id),
-            settings.get_market_data_rate_limit_per_second(chain_id=chain_id),
-            settings.get_market_data_circuit_failure_threshold(chain_id=chain_id),
-            settings.get_market_data_circuit_recovery_seconds(chain_id=chain_id),
-            settings.get_market_data_min_success_ratio(chain_id=chain_id),
-            settings.get_market_data_min_pair_age_seconds(chain_id=chain_id),
+            pipeline_settings.scheduler_enabled,
+            pipeline_settings.scheduler_interval_seconds,
+            pipeline_settings.scheduler_startup_jitter_seconds,
+            ingestion_settings.get_retry_attempts(chain_id=chain_id),
+            ingestion_settings.get_max_concurrency(chain_id=chain_id),
+            ingestion_settings.get_rate_limit_per_second(chain_id=chain_id),
+            ingestion_settings.get_circuit_failure_threshold(chain_id=chain_id),
+            ingestion_settings.get_circuit_recovery_seconds(chain_id=chain_id),
+            ingestion_settings.get_min_success_ratio(chain_id=chain_id),
+            ingestion_settings.get_min_pair_age_seconds(chain_id=chain_id),
         )
 
 
@@ -97,14 +103,14 @@ def _http_error(
 
 
 def _sweep_rate_limit_bucket(now: float) -> None:
-    ttl_seconds = max(60.0, settings.app_rate_limit_bucket_key_ttl_seconds)
+    ttl_seconds = max(60.0, app_settings.rate_limit_bucket_key_ttl_seconds)
     stale_before = now - ttl_seconds
     stale_keys = [key for key, last_seen in _RL_LAST_SEEN.items() if last_seen < stale_before]
     for key in stale_keys:
         _RL_LAST_SEEN.pop(key, None)
         _RL_BUCKET.pop(key, None)
 
-    max_keys = max(1, settings.app_rate_limit_bucket_max_keys)
+    max_keys = max(1, app_settings.rate_limit_bucket_max_keys)
     if len(_RL_LAST_SEEN) <= max_keys:
         return
 
@@ -117,14 +123,14 @@ def _sweep_rate_limit_bucket(now: float) -> None:
 
 def _enforce_replay_request(request: Request, chain_id: str) -> None:
     global _REPLAY_RL_LAST_SWEEP_AT
-    if chain_id not in settings.replay_allowed_chains:
+    if chain_id not in pipeline_settings.replay_allowed_chains:
         raise _http_error(
             status_code=status.HTTP_403_FORBIDDEN,
             message=f"{chain_id} replay is disabled",
         )
 
-    if settings.pipeline_replay_require_api_key:
-        expected = settings.app_api_key.strip()
+    if pipeline_settings.replay_require_api_key:
+        expected = app_settings.api_key.strip()
         provided = request.headers.get("x-api-key", "")
         if not expected:
             raise _http_error(
@@ -138,13 +144,13 @@ def _enforce_replay_request(request: Request, chain_id: str) -> None:
                 message="unauthorized replay request",
             )
 
-    limit_base = max(0, settings.pipeline_replay_rate_limit_per_minute)
+    limit_base = max(0, pipeline_settings.replay_rate_limit_per_minute)
     if limit_base <= 0:
         return
 
     now = monotonic()
     if now - _REPLAY_RL_LAST_SWEEP_AT >= _RL_SWEEP_INTERVAL_SECONDS:
-        ttl_seconds = max(60.0, settings.app_rate_limit_bucket_key_ttl_seconds)
+        ttl_seconds = max(60.0, app_settings.rate_limit_bucket_key_ttl_seconds)
         stale_before = now - ttl_seconds
         stale_keys = [
             key for key, last_seen in _REPLAY_RL_LAST_SEEN.items() if last_seen < stale_before
@@ -161,7 +167,7 @@ def _enforce_replay_request(request: Request, chain_id: str) -> None:
     cutoff = now - 60.0
     while timestamps and timestamps[0] < cutoff:
         timestamps.popleft()
-    replay_limit = max(1, limit_base + settings.pipeline_replay_rate_limit_burst)
+    replay_limit = max(1, limit_base + pipeline_settings.replay_rate_limit_burst)
     if len(timestamps) >= replay_limit:
         REPLAY_RATE_LIMIT_REJECTS.labels(chain_id=chain_id).inc()
         raise _http_error(
@@ -173,16 +179,16 @@ def _enforce_replay_request(request: Request, chain_id: str) -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    if settings.pipeline_scheduler_enabled:
+    if pipeline_settings.scheduler_enabled:
         for chain_id in scheduler_chain_ids:
             try:
                 pipeline = _get_pipeline_service(chain_id=chain_id)
                 scheduler = ChainPipelineScheduler(
                     chain_id=chain_id,
                     pipeline=pipeline,
-                    interval_seconds=settings.pipeline_scheduler_interval_seconds,
-                    initial_delay_seconds=settings.pipeline_scheduler_initial_delay_seconds,
-                    startup_jitter_seconds=settings.pipeline_scheduler_startup_jitter_seconds,
+                    interval_seconds=pipeline_settings.scheduler_interval_seconds,
+                    initial_delay_seconds=pipeline_settings.scheduler_initial_delay_seconds,
+                    startup_jitter_seconds=pipeline_settings.scheduler_startup_jitter_seconds,
                 )
                 await scheduler.start()
                 schedulers[chain_id] = scheduler
@@ -191,7 +197,7 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
-        if settings.pipeline_scheduler_enabled:
+        if pipeline_settings.scheduler_enabled:
             for scheduler in schedulers.values():
                 await scheduler.stop()
             schedulers.clear()
@@ -203,7 +209,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title=settings.app_name,
+    title=app_settings.name,
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -223,8 +229,8 @@ def _auth_required(path: str) -> bool:
 async def auth_and_rate_limit_middleware(request: Request, call_next):
     global _RL_LAST_SWEEP_AT
     request_id = request.headers.get("x-request-id", uuid4().hex[:16])
-    if settings.app_require_api_key and _auth_required(request.url.path):
-        expected = settings.app_api_key.strip()
+    if app_settings.require_api_key and _auth_required(request.url.path):
+        expected = app_settings.api_key.strip()
         provided = request.headers.get("x-api-key", "")
         if not expected or provided != expected:
             AUTH_REJECTS.labels(path=request.url.path).inc()
@@ -233,7 +239,7 @@ async def auth_and_rate_limit_middleware(request: Request, call_next):
                 status_code=status.HTTP_401_UNAUTHORIZED,
             )
 
-    if settings.app_rate_limit_per_minute > 0:
+    if app_settings.rate_limit_per_minute > 0:
         now = monotonic()
         if now - _RL_LAST_SWEEP_AT >= _RL_SWEEP_INTERVAL_SECONDS:
             _sweep_rate_limit_bucket(now)
@@ -246,7 +252,7 @@ async def auth_and_rate_limit_middleware(request: Request, call_next):
         cutoff = now - window_seconds
         while timestamps and timestamps[0] < cutoff:
             timestamps.popleft()
-        limit = max(1, settings.app_rate_limit_per_minute + settings.app_rate_limit_burst)
+        limit = max(1, app_settings.rate_limit_per_minute + app_settings.rate_limit_burst)
         if len(timestamps) >= limit:
             RATE_LIMIT_REJECTS.labels(path=request.url.path).inc()
             return JSONResponse(
@@ -260,23 +266,27 @@ async def auth_and_rate_limit_middleware(request: Request, call_next):
 
 
 def _get_pipeline_service(chain_id: str) -> ChainPipelineService:
-    if chain_id not in settings.supported_chains:
+    if chain_id not in chain_settings.supported_chains:
         raise HTTPException(
             status_code=400,
-            detail=f"unsupported chain_id '{chain_id}', supported={settings.supported_chains}",
+            detail=(
+                f"unsupported chain_id '{chain_id}', supported={chain_settings.supported_chains}"
+            ),
         )
-    service = pipeline_services.get(chain_id)
-    if service is None:
-        service = ChainPipelineService(chain_id=chain_id)
-        pipeline_services[chain_id] = service
-    return service
+        service = pipeline_services.get(chain_id)
+        if service is None:
+            service = ChainPipelineService(chain_id=chain_id)
+            pipeline_services[chain_id] = service
+        return service
 
 
 def _get_backtest_service(chain_id: str) -> BacktestService:
-    if chain_id not in settings.supported_chains:
+    if chain_id not in chain_settings.supported_chains:
         raise HTTPException(
             status_code=400,
-            detail=f"unsupported chain_id '{chain_id}', supported={settings.supported_chains}",
+            detail=(
+                f"unsupported chain_id '{chain_id}', supported={chain_settings.supported_chains}"
+            ),
         )
     service = backtest_services.get(chain_id)
     if service is None:
@@ -288,7 +298,7 @@ def _get_backtest_service(chain_id: str) -> BacktestService:
 @app.get("/healthz", tags=["infra"])
 def healthz() -> dict[str, str]:
     REQUEST_COUNT.labels(path="/healthz", method="GET").inc()
-    return {"status": "ok", "env": settings.app_env}
+    return {"status": "ok", "env": app_settings.env}
 
 
 @app.get("/metrics", tags=["infra"])
