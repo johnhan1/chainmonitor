@@ -5,6 +5,7 @@ from datetime import datetime
 from email.utils import parsedate_to_datetime
 
 import httpx
+from src.shared.resilience.retry import retry_sleep_seconds  # noqa: F401
 
 
 class RetryPolicy:
@@ -59,7 +60,7 @@ class RetryPolicy:
         return value
 
     @classmethod
-    def retry_sleep_seconds(
+    def retry_sleep_seconds(  # noqa: F811
         cls,
         exc: Exception,
         base_backoff: float,
