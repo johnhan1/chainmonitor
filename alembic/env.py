@@ -4,15 +4,15 @@ from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
-from src.shared.config import get_settings
+from src.shared.config.postgres import get_postgres_settings
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.postgres_dsn)
+postgres_settings = get_postgres_settings()
+config.set_main_option("sqlalchemy.url", postgres_settings.dsn)
 
 target_metadata = None
 

@@ -15,6 +15,7 @@ from src.ingestion.contracts.pair_quality_policy import (
 )
 from src.ingestion.contracts.provider_adapter import ProviderAdapter
 from src.ingestion.contracts.source_strategy import SourceStrategy
+from src.shared.config.ingestion import IngestionSettings, get_ingestion_settings
 from src.shared.schemas.pipeline import MarketTickInput
 
 logger = logging.getLogger(__name__)
@@ -26,10 +27,14 @@ class BaseLiveSourceStrategy(ChainIngestionSourceBase, SourceStrategy, ABC):
         chain_id: str,
         adapter: ProviderAdapter,
         quality_policy: PairQualityPolicy | None = None,
+        ingestion_settings: IngestionSettings | None = None,
     ) -> None:
         super().__init__(chain_id=chain_id)
         self._adapter = adapter
-        self._quality_policy = quality_policy or DefaultPairQualityPolicy(settings=self.settings)
+        self._ingestion_settings = ingestion_settings or get_ingestion_settings()
+        self._quality_policy = quality_policy or DefaultPairQualityPolicy(
+            settings=self._ingestion_settings
+        )
 
     async def fetch_market_ticks(self, ts_minute: datetime | None = None) -> list[MarketTickInput]:
         target_ts = self._normalize_ts(ts_minute)

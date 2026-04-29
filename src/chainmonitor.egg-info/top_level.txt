@@ -1,0 +1,9 @@
+app
+backtest
+evolution
+feature
+ingestion
+paper
+scanner
+scoring
+shared

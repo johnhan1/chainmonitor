@@ -11,7 +11,9 @@ from src.ingestion.contracts.errors import IngestionFetchError
 from src.ingestion.contracts.normalized_pair import NormalizedPair
 from src.ingestion.resilience.resilient_http_client import INGEST_ERROR_TOTAL, ResilientHttpClient
 from src.ingestion.strategies.base_live_source_strategy import BaseLiveSourceStrategy
-from src.shared.config import get_settings
+from src.shared.config.app import get_app_settings
+from src.shared.config.chain import get_chain_settings
+from src.shared.config.ingestion import get_ingestion_settings
 from src.shared.schemas.pipeline import MarketTickInput
 
 logger = logging.getLogger(__name__)
@@ -26,18 +28,23 @@ INGEST_GECKO_SUCCESS_RATIO = Gauge(
 
 class GeckoTerminalSourceStrategy(BaseLiveSourceStrategy):
     def __init__(self, chain_id: str) -> None:
-        settings = get_settings()
+        chain_settings = get_chain_settings()
+        ingestion_settings = get_ingestion_settings()
+        app_settings = get_app_settings()
+        self._ingestion_settings = ingestion_settings
+        self._app_settings = app_settings
         http_client = ResilientHttpClient(
             chain_id=chain_id,
             provider=PROVIDER,
-            settings=settings,
+            settings=ingestion_settings,
             headers={"Accept": "application/json"},
         )
         super().__init__(
             chain_id=chain_id,
             adapter=GeckoTerminalProviderAdapter(
                 chain_id=chain_id,
-                settings=settings,
+                settings=ingestion_settings,
+                chain_settings=chain_settings,
                 http_client=http_client,
             ),
         )
@@ -173,7 +180,7 @@ class GeckoTerminalSourceStrategy(BaseLiveSourceStrategy):
         pairs_by_symbol: dict[str, NormalizedPair],
         trace_id: str,
     ) -> None:
-        min_success_ratio = self.settings.get_market_data_min_success_ratio(chain_id=self.chain_id)
+        min_success_ratio = self._ingestion_settings.get_min_success_ratio(chain_id=self.chain_id)
         success_ratio = len(pairs_by_symbol) / max(1, len(symbols))
         INGEST_GECKO_SUCCESS_RATIO.labels(chain_id=self.chain_id).set(success_ratio)
         if success_ratio < min_success_ratio:
@@ -212,12 +219,12 @@ class GeckoTerminalSourceStrategy(BaseLiveSourceStrategy):
 
     def _required_address_symbols(self, symbols: list[str]) -> set[str]:
         symbol_set = set(symbols)
-        configured = self.settings.get_market_data_required_address_symbols(chain_id=self.chain_id)
+        configured = self._ingestion_settings.get_required_address_symbols(chain_id=self.chain_id)
         if configured:
             return configured & symbol_set
         if (
-            self.settings.is_production
-            and self.settings.market_data_require_address_mapping_in_production
+            self._app_settings.is_production
+            and self._ingestion_settings.require_address_mapping_in_production
         ):
             return symbol_set
         return set()

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from src.shared.config import get_settings
+from src.shared.config.pipeline import get_pipeline_settings
 from src.shared.schemas.pipeline import FeatureRowInput, MarketTickInput, ScoreRowInput
 
 
 class ScoringEngine:
     def __init__(self, strategy_version: str = "") -> None:
-        self.settings = get_settings()
+        self.settings = get_pipeline_settings()
         self.strategy_version = strategy_version
 
     def score(
@@ -65,11 +65,11 @@ class ScoringEngine:
         return rows
 
     def _tier(self, conviction: float) -> str:
-        if conviction >= self.settings.candidate_tier_a_threshold:
+        if conviction >= self.settings.tier_a_threshold:
             return "A"
-        if conviction >= self.settings.candidate_tier_b_threshold:
+        if conviction >= self.settings.tier_b_threshold:
             return "B"
-        if conviction >= self.settings.candidate_tier_c_threshold:
+        if conviction >= self.settings.tier_c_threshold:
             return "C"
         return "C"
 

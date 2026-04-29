@@ -6,7 +6,8 @@ from hashlib import sha256
 from src.backtest.cost_model import TradeCost, TradeCostModel
 from src.feature.feature_engine import FeatureEngine
 from src.scoring.scoring_engine import ScoringEngine
-from src.shared.config import get_settings
+from src.shared.config.chain import get_chain_settings
+from src.shared.config.pipeline import get_pipeline_settings
 from src.shared.schemas.backtest import BacktestConfig, BacktestMetrics, BacktestTradeResult
 from src.shared.schemas.pipeline import MarketTickInput
 
@@ -57,20 +58,21 @@ class _BacktestSyntheticSource:
 
 class BacktestEngine:
     def __init__(self, chain_id: str) -> None:
-        settings = get_settings()
-        if chain_id not in settings.supported_chains:
+        chain_settings = get_chain_settings()
+        pipeline_settings = get_pipeline_settings()
+        if chain_id not in chain_settings.supported_chains:
             raise ValueError(f"unsupported chain_id: {chain_id}")
-        self.settings = settings
+        self.pipeline_settings = pipeline_settings
         self.chain_id = chain_id
         symbols = tuple(
             symbol.strip().upper()
-            for symbol in self.settings.get_chain_symbols(chain_id).split(",")
+            for symbol in chain_settings.get_chain_symbols(chain_id).split(",")
             if symbol.strip()
         )
         self.source = _BacktestSyntheticSource(chain_id=chain_id, symbols=symbols)
         self.feature_engine = FeatureEngine()
         self.scoring_engine = ScoringEngine(
-            strategy_version=self.settings.get_strategy_version(chain_id=chain_id)
+            strategy_version=chain_settings.get_strategy_version(chain_id=chain_id)
         )
 
     async def run(
@@ -139,9 +141,9 @@ class BacktestEngine:
         return [
             tick
             for tick in ticks
-            if tick.liquidity_usd >= self.settings.gate_min_liquidity_usd
-            and tick.volume_5m >= self.settings.gate_min_volume_5m_usd
-            and tick.tx_count_1m >= self.settings.gate_min_tx_1m
+            if tick.liquidity_usd >= self.pipeline_settings.min_liquidity_usd
+            and tick.volume_5m >= self.pipeline_settings.min_volume_5m_usd
+            and tick.tx_count_1m >= self.pipeline_settings.min_tx_1m
         ]
 
     @staticmethod

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from src.app.services.chain_pipeline_service import ChainPipelineService
 from src.ingestion.contracts.source_strategy import SourceStrategy
 from src.ingestion.services.chain_ingestion_service import ChainIngestionService
-from src.shared.config import get_settings
+from src.shared.config.chain import get_chain_settings
 from src.shared.schemas.pipeline import MarketTickInput
 
 
@@ -31,9 +31,9 @@ class _FakeChainStrategy(SourceStrategy):
 
 
 def test_market_ingestion_service_supports_all_phase1_chains() -> None:
-    settings = get_settings()
+    chain_settings = get_chain_settings()
     ts = datetime(2026, 4, 18, 12, 30, tzinfo=UTC)
-    for chain_id in settings.supported_chains:
+    for chain_id in chain_settings.supported_chains:
         source = ChainIngestionService(chain_id=chain_id)
         source.strategy = _FakeChainStrategy(chain_id=chain_id)
         rows = asyncio.run(source.fetch_market_ticks(ts_minute=ts))

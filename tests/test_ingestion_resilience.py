@@ -8,7 +8,7 @@ from src.ingestion.contracts.source_strategy import SourceStrategy
 from src.ingestion.fallback.fallback_source_chain import FallbackSourceChain
 from src.ingestion.resilience.resilient_http_client import ResilientHttpClient
 from src.ingestion.strategies.dexscreener_source_strategy import DexScreenerSourceStrategy
-from src.shared.config import get_settings
+from src.shared.config.ingestion import get_ingestion_settings
 from src.shared.schemas.pipeline import MarketTickInput
 
 
@@ -54,7 +54,7 @@ def test_fallback_chain_uses_secondary_when_primary_raises() -> None:
 
 
 def test_resilient_http_client_retries_on_429(monkeypatch) -> None:
-    settings = get_settings()
+    settings = get_ingestion_settings()
     client = ResilientHttpClient(chain_id="bsc", provider="dexscreener", settings=settings)
     client._cache_ttl_seconds = 0  # noqa: SLF001
     calls = {"count": 0}
@@ -82,7 +82,7 @@ def test_resilient_http_client_retries_on_429(monkeypatch) -> None:
 
 
 def test_resilient_http_client_retry_after_http_date_is_used() -> None:
-    settings = get_settings()
+    settings = get_ingestion_settings()
     client = ResilientHttpClient(chain_id="bsc", provider="dexscreener", settings=settings)
     retry_at = datetime.now(tz=UTC) + timedelta(seconds=2)
     response = httpx.Response(
@@ -124,14 +124,14 @@ def test_insufficient_coverage_raises(monkeypatch) -> None:
 
 
 def test_resilient_http_client_uses_provider_specific_rate_limit() -> None:
-    settings = get_settings().model_copy(
+    settings = get_ingestion_settings().model_copy(
         update={
-            "market_data_rate_limit_per_second": 10.0,
-            "market_data_rate_limit_capacity": 20,
-            "market_data_rate_limit_per_second_by_provider": "dexscreener=4,geckoterminal=2",
-            "market_data_rate_limit_capacity_by_provider": "dexscreener=8,geckoterminal=4",
-            "market_data_rate_limit_per_second_by_provider_chain": "dexscreener:bsc=3.5",
-            "market_data_rate_limit_capacity_by_provider_chain": "dexscreener:bsc=7",
+            "rate_limit_per_second": 10.0,
+            "rate_limit_capacity": 20,
+            "rate_limit_per_second_by_provider": "dexscreener=4,geckoterminal=2",
+            "rate_limit_capacity_by_provider": "dexscreener=8,geckoterminal=4",
+            "rate_limit_per_second_by_provider_chain": "dexscreener:bsc=3.5",
+            "rate_limit_capacity_by_provider_chain": "dexscreener:bsc=7",
         }
     )
     client = ResilientHttpClient(chain_id="bsc", provider="dexscreener", settings=settings)
@@ -141,8 +141,8 @@ def test_resilient_http_client_uses_provider_specific_rate_limit() -> None:
 
 def test_required_symbol_invalid_when_row_filtered(monkeypatch) -> None:
     strategy = DexScreenerSourceStrategy(chain_id="bsc")
-    strategy.settings.market_data_min_success_ratio = 1.0
-    strategy.settings.market_data_required_address_symbols_by_chain = "bsc=BNB"
+    strategy._ingestion_settings.min_success_ratio = 1.0
+    strategy._ingestion_settings.required_address_symbols_by_chain = "bsc=BNB"
     strategy.settings.bsc_token_addresses = "BNB=0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"
     monkeypatch.setattr(strategy, "_symbols", lambda: ["BNB"], raising=True)
 

@@ -3,12 +3,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from hashlib import sha256
 
-from src.shared.config import Settings, get_settings
+from src.shared.config.chain import ChainSettings, get_chain_settings
 
 
 class ChainIngestionSourceBase:
     def __init__(self, chain_id: str) -> None:
-        self.settings: Settings = get_settings()
+        self.settings: ChainSettings = get_chain_settings()
         if chain_id not in self.settings.supported_chains:
             raise ValueError(f"unsupported chain_id: {chain_id}")
         self.chain_id = chain_id

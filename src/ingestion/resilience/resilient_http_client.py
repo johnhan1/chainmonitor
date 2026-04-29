@@ -20,7 +20,8 @@ from src.ingestion.resilience.metrics import (
 from src.ingestion.resilience.rate_limiter import RateLimiterRegistry
 from src.ingestion.resilience.retry_policy import RetryPolicy
 from src.ingestion.resilience.singleflight import SingleFlightGroup
-from src.shared.config import Settings
+from src.shared.config.infra import get_infra_settings
+from src.shared.config.ingestion import IngestionSettings
 
 logger = logging.getLogger(__name__)
 __all__ = ["ResilientHttpClient", "INGEST_ERROR_TOTAL"]
@@ -31,22 +32,23 @@ class ResilientHttpClient:
         self,
         chain_id: str,
         provider: str,
-        settings: Settings,
+        settings: IngestionSettings,
         headers: dict[str, str] | None = None,
     ) -> None:
         self._chain_id = chain_id
         self._provider = provider.strip().lower()
         self._settings = settings
+        infra_settings = get_infra_settings()
         self._headers = headers or {}
         self._metrics = ResilienceMetrics(chain_id=chain_id, provider=self._provider)
         self._bucket = RateLimiterRegistry.get_bucket(
             provider=self._provider,
             chain_id=self._chain_id,
-            rate_per_second=self._settings.get_market_data_rate_limit_per_second(
+            rate_per_second=self._settings.get_rate_limit_per_second(
                 chain_id=self._chain_id,
                 provider=self._provider,
             ),
-            capacity=self._settings.get_market_data_rate_limit_capacity(
+            capacity=self._settings.get_rate_limit_capacity(
                 chain_id=self._chain_id,
                 provider=self._provider,
             ),
@@ -57,32 +59,30 @@ class ResilientHttpClient:
         )
         self._provider_backoff_base_seconds = max(
             0.1,
-            float(self._settings.market_data_retry_base_seconds),
+            float(self._settings.retry_base_seconds),
         )
         self._provider_backoff_max_seconds = max(
             0.5,
-            float(self._settings.market_data_retry_max_sleep_seconds),
+            float(self._settings.retry_max_sleep_seconds),
         )
         self._blocked_since_by_endpoint: dict[str, float] = {}
         self._blocked_since_lock = asyncio.Lock()
         self._cache = ResponseCacheStore(
             chain_id=self._chain_id,
             provider=self._provider,
-            redis_url=self._settings.redis_url,
-            ttl_seconds=self._settings.market_data_cache_ttl_seconds,
-            max_entries=self._settings.market_data_cache_max_entries,
+            redis_url=infra_settings.redis_url,
+            ttl_seconds=self._settings.cache_ttl_seconds,
+            max_entries=self._settings.cache_max_entries,
             metrics=self._metrics,
         )
         self._singleflight = SingleFlightGroup()
         self._http_client: AsyncClient | None = None
         self._http_client_lock = asyncio.Lock()
-        self._http_client_timeout = max(0.5, self._settings.market_data_timeout_seconds)
+        self._http_client_timeout = max(0.5, self._settings.timeout_seconds)
         self._http_client_limits = httpx.Limits(
-            max_connections=max(1, self._settings.market_data_http_max_connections),
-            max_keepalive_connections=max(
-                1, self._settings.market_data_http_max_keepalive_connections
-            ),
-            keepalive_expiry=max(1.0, self._settings.market_data_http_keepalive_expiry_seconds),
+            max_connections=max(1, self._settings.http_max_connections),
+            max_keepalive_connections=max(1, self._settings.http_max_keepalive_connections),
+            keepalive_expiry=max(1.0, self._settings.http_keepalive_expiry_seconds),
         )
 
     async def get_json(
@@ -142,9 +142,9 @@ class ResilientHttpClient:
             return None
         await self._clear_circuit_blocked(endpoint=endpoint)
         self._metrics.circuit_open_state(endpoint=endpoint, opened=False)
-        max_attempts = self._settings.get_market_data_retry_attempts(chain_id=self._chain_id)
-        backoff = max(0.05, self._settings.market_data_retry_base_seconds)
-        max_sleep_seconds = max(0.05, float(self._settings.market_data_retry_max_sleep_seconds))
+        max_attempts = self._settings.get_retry_attempts(chain_id=self._chain_id)
+        backoff = max(0.05, self._settings.retry_base_seconds)
+        max_sleep_seconds = max(0.05, float(self._settings.retry_max_sleep_seconds))
         for attempt in range(1, max_attempts + 1):
             try:
                 await self._bucket.acquire()
@@ -235,13 +235,9 @@ class ResilientHttpClient:
             provider=self._provider,
             chain_id=self._chain_id,
             endpoint=endpoint,
-            failure_threshold=self._settings.get_market_data_circuit_failure_threshold(
-                chain_id=self._chain_id
-            ),
-            recovery_seconds=self._settings.get_market_data_circuit_recovery_seconds(
-                chain_id=self._chain_id
-            ),
-            half_open_max_calls=self._settings.market_data_circuit_half_open_max_calls,
+            failure_threshold=self._settings.get_circuit_failure_threshold(chain_id=self._chain_id),
+            recovery_seconds=self._settings.get_circuit_recovery_seconds(chain_id=self._chain_id),
+            half_open_max_calls=self._settings.circuit_half_open_max_calls,
         )
 
     async def _record_circuit_blocked(self, endpoint: str, now: float) -> None:

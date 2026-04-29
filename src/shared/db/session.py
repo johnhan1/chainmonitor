@@ -4,20 +4,20 @@ from functools import lru_cache
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
-from src.shared.config import get_settings
+from src.shared.config.postgres import get_postgres_settings
 
 
 @lru_cache
 def get_engine() -> Engine:
-    settings = get_settings()
+    settings = get_postgres_settings()
     return create_engine(
-        settings.postgres_dsn,
+        settings.dsn,
         future=True,
         pool_pre_ping=True,
-        pool_size=max(1, settings.postgres_pool_size),
-        max_overflow=max(0, settings.postgres_max_overflow),
-        pool_timeout=max(1, settings.postgres_pool_timeout_seconds),
-        pool_recycle=max(60, settings.postgres_pool_recycle_seconds),
+        pool_size=max(1, settings.pool_size),
+        max_overflow=max(0, settings.max_overflow),
+        pool_timeout=max(1, settings.pool_timeout_seconds),
+        pool_recycle=max(60, settings.pool_recycle_seconds),
     )
 
 

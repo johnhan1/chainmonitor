@@ -11,7 +11,8 @@ from prometheus_client import Counter, Gauge, Histogram
 from src.app.services.pipeline_registry import PipelineComponentRegistry
 from src.ingestion.contracts.errors import IngestionFetchError
 from src.ingestion.services.chain_ingestion_service import ChainIngestionService
-from src.shared.config import get_settings
+from src.shared.config.chain import get_chain_settings
+from src.shared.config.pipeline import get_pipeline_settings
 from src.shared.db import PipelineRepository, get_engine
 from src.shared.schemas.pipeline import (
     FeatureRowInput,
@@ -51,10 +52,12 @@ class ChainPipelineService:
         chain_id: str,
         registry: PipelineComponentRegistry | None = None,
     ) -> None:
-        self.settings = get_settings()
-        if chain_id not in self.settings.supported_chains:
+        chain_settings = get_chain_settings()
+        if chain_id not in chain_settings.supported_chains:
             raise ValueError(f"unsupported chain_id: {chain_id}")
 
+        self.settings = get_pipeline_settings()
+        self._chain_settings = chain_settings
         self.chain_id = chain_id
         self.source = ChainIngestionService(chain_id=chain_id)
         components = (registry or DEFAULT_PIPELINE_REGISTRY).resolve(chain_id=chain_id)
@@ -99,7 +102,7 @@ class ChainPipelineService:
         self._validate_replay_window(run_ts=run_ts)
         replay_limit = max(1, self.settings.pipeline_replay_max_in_flight_per_chain)
         stale_seconds = int(max(60.0, self.settings.pipeline_run_timeout_seconds * 2))
-        strategy_version = self.settings.get_strategy_version(chain_id=self.chain_id)
+        strategy_version = self._chain_settings.get_strategy_version(chain_id=self.chain_id)
         run_id = uuid4().hex[:16]
         with self.repo.replay_lock(chain_id=self.chain_id) as acquired:
             if not acquired:
@@ -277,7 +280,7 @@ class ChainPipelineService:
 
     def _claim_run(self, run_ts: datetime, trigger: str) -> tuple[str, str] | None:
         run_id = uuid4().hex[:16]
-        strategy_version = self.settings.get_strategy_version(chain_id=self.chain_id)
+        strategy_version = self._chain_settings.get_strategy_version(chain_id=self.chain_id)
         started = self.repo.try_start_pipeline_run(
             chain_id=self.chain_id,
             strategy_version=strategy_version,
@@ -363,7 +366,7 @@ class ChainPipelineService:
 
     def _build_skipped_summary(self, trigger: str, run_ts: datetime) -> PipelineRunSummary:
         run_id = uuid4().hex[:16]
-        strategy_version = self.settings.get_strategy_version(chain_id=self.chain_id)
+        strategy_version = self._chain_settings.get_strategy_version(chain_id=self.chain_id)
         PIPELINE_RUNS.labels(chain_id=self.chain_id, status="skipped", trigger=trigger).inc()
         return PipelineRunSummary(
             run_id=run_id,
@@ -403,7 +406,7 @@ class ChainPipelineService:
         return [
             tick
             for tick in ticks
-            if tick.liquidity_usd >= self.settings.gate_min_liquidity_usd
-            and tick.volume_5m >= self.settings.gate_min_volume_5m_usd
-            and tick.tx_count_1m >= self.settings.gate_min_tx_1m
+            if tick.liquidity_usd >= self.settings.min_liquidity_usd
+            and tick.volume_5m >= self.settings.min_volume_5m_usd
+            and tick.tx_count_1m >= self.settings.min_tx_1m
         ]

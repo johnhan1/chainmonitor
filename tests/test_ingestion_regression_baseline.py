@@ -7,8 +7,8 @@ from src.ingestion.strategies.dexscreener_source_strategy import DexScreenerSour
 
 def test_dexscreener_tick_mapping_regression_baseline(monkeypatch) -> None:
     strategy = DexScreenerSourceStrategy(chain_id="bsc")
-    strategy.settings.market_data_require_address_mapping_in_production = False
-    strategy.settings.market_data_required_address_symbols_by_chain = ""
+    strategy._ingestion_settings.require_address_mapping_in_production = False
+    strategy._ingestion_settings.required_address_symbols_by_chain = ""
     ts = datetime(2026, 4, 18, 12, 30, 33, 456789, tzinfo=UTC)
     monkeypatch.setattr(strategy, "_symbols", lambda: ["BNB"], raising=True)
 
