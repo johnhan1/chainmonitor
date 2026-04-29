@@ -1,52 +1,100 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_app_env = os.getenv("CM_APP_ENV", "dev")
+
 
 class IngestionSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CM_MARKET_DATA_", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(".env", f".env.{_app_env}"),
+        env_file_encoding="utf-8",
+        env_prefix="CM_MARKET_DATA_",
+        extra="ignore",
+    )
 
+    # HTTP 请求超时秒数
     timeout_seconds: float = 3.0
+    # 请求重试次数
     retry_attempts: int = 3
+    # 退避策略初始秒数
     retry_base_seconds: float = 0.3
+    # 退避策略最大秒数
     retry_max_sleep_seconds: float = 15.0
+    # 默认最大并发数（可被按链覆盖）
     max_concurrency: int = 8
+    # 令牌桶速率（每秒许可数，可被按链/按 Provider 覆盖）
     rate_limit_per_second: float = 10.0
+    # 令牌桶容量（可被按链/按 Provider 覆盖）
     rate_limit_capacity: int = 20
+    # 按链覆盖令牌桶容量，格式: chain_id=capacity,chain_id=capacity
     rate_limit_capacity_by_chain: str = ""
+    # 按 Provider 覆盖速率，格式: provider=rate,provider=rate
     rate_limit_per_second_by_provider: str = ""
+    # 按 Provider 覆盖容量，格式: provider=capacity,provider=capacity
     rate_limit_capacity_by_provider: str = ""
+    # 按 Provider+链 覆盖速率，格式: provider:chain=rate,provider:chain=rate
     rate_limit_per_second_by_provider_chain: str = ""
+    # 按 Provider+链 覆盖容量，格式: provider:chain=capacity
     rate_limit_capacity_by_provider_chain: str = ""
+    # 断路器：连续失败次数阈值
     circuit_failure_threshold: int = 5
+    # 断路器：半开后等待恢复秒数
     circuit_recovery_seconds: float = 30.0
+    # 断路器：半开状态下最大试探请求数
     circuit_half_open_max_calls: int = 2
+    # 一次采集所需的最低成功比例（成功symbol/总symbol）
     min_success_ratio: float = 0.6
+    # 新交易对最低存活时间（秒），低于此值认为不可靠
     min_pair_age_seconds: int = 300
+    # 成交量/流动性的最大允许比率，超过则过滤
     max_volume_liquidity_ratio: float = 20.0
+    # 响应缓存 TTL（秒）
     cache_ttl_seconds: float = 3.0
+    # 响应缓存最大条目数
     cache_max_entries: int = 2000
+    # HTTP 连接池最大连接数
     http_max_connections: int = 100
+    # HTTP 连接池最大 Keepalive 连接数
     http_max_keepalive_connections: int = 20
+    # HTTP Keepalive 过期秒数
     http_keepalive_expiry_seconds: float = 30.0
+    # 按链覆盖重试次数，格式: chain_id=N
     retry_attempts_by_chain: str = ""
+    # 按链覆盖最大并发数，格式: chain_id=N
     max_concurrency_by_chain: str = ""
+    # 按链覆盖令牌桶速率，格式: chain_id=rate
     rate_limit_per_second_by_chain: str = ""
+    # 按链覆盖断路器阈值，格式: chain_id=N
     circuit_failure_threshold_by_chain: str = ""
+    # 按链覆盖断路器恢复秒数，格式: chain_id=seconds
     circuit_recovery_seconds_by_chain: str = ""
+    # 按链覆盖最低成功比例，格式: chain_id=ratio
     min_success_ratio_by_chain: str = ""
+    # 按链覆盖最低交易对年龄，格式: chain_id=seconds
     min_pair_age_seconds_by_chain: str = ""
+    # 按链覆盖成交量/流动性比率上限，格式: chain_id=ratio
     max_volume_liquidity_ratio_by_chain: str = ""
+    # 按链要求必须提供地址映射的 Symbol 列表（* 表示全部）
     required_address_symbols_by_chain: str = ""
+    # 生产环境是否强制要求地址映射
     require_address_mapping_in_production: bool = True
+    # DEX 黑名单 ID 列表，逗号分隔
     dex_blacklist_ids: str = ""
+    # 路由关键词黑名单，匹配 pair_address/url 时过滤
     route_blacklist_keywords: str = ""
+    # GeckoTerminal API 基础 URL
     geckoterminal_api_base: str = "https://api.geckoterminal.com/api/v2"
+    # 按链覆盖 GeckoTerminal 网络名，格式: chain_id=network
     geckoterminal_network_by_chain: str = ""
+    # Birdeye API 基础 URL
     birdeye_api_base: str = "https://public-api.birdeye.so/defi"
+    # Birdeye API 密钥
     birdeye_api_key: str = ""
+    # 按链覆盖 Birdeye 链名，格式: chain_id=chain_name
     birdeye_chain_by_chain: str = ""
 
     @property

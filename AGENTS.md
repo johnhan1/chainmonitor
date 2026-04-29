@@ -17,6 +17,7 @@ Every command goes through `dev.ps1`. Avoid running sub-scripts (`setup.ps1`, `c
 - Python 3.11 / 3.12 only. `.venv` is **mandatory** — never `pip install` globally.
 - `setup.ps1` defaults to `py -3.12`. Override: `.\scripts\dev.ps1 -Command init` (or `setup.ps1 -Python 'py -3.11'`).
 - Settings loaded from `.env` + `.env.{dev,staging,prod}` (auto-detected from `CM_APP_ENV`). All vars prefixed `CM_`.
+- Config split into 7 domain modules under `src/shared/config/`. Import only what you need: `from src.shared.config.scanner import get_scanner_settings`.
 - Copy `.env.example` → `.env` for local dev. Never commit `.env`.
 
 ## Project layout
@@ -36,7 +37,9 @@ src/
   scoring/                 # ScoringEngine (FeatureRowInput → ScoreRowInput)
   backtest/                # Engine, optimizer, batch, attribution, gate2 validator, reporting
   shared/
-    config.py              # Settings (pydantic-settings, CM_ prefix)
+    config/                # 7 domain-specific settings (pydantic-settings, CM_ prefix)
+      __init__.py, app.py, postgres.py, infra.py, chain.py,
+      ingestion.py, pipeline.py, scanner.py
     db/                    # session.py, repository.py
     schemas/               # Pipeline & backtest Pydantic models
     contracts/             # Events, CandidateSnapshot, FeatureBatch, ScoreBatch

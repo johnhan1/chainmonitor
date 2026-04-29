@@ -1,29 +1,54 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_app_env = os.getenv("CM_APP_ENV", "dev")
+
 
 class ChainSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CM_", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(".env", f".env.{_app_env}"),
+        env_file_encoding="utf-8",
+        env_prefix="CM_",
+        extra="ignore",
+    )
 
+    # BSC 链标识
     bsc_chain_id: str = "bsc"
+    # BSC 默认监控代币列表，逗号分隔
     bsc_default_symbols: str = "BNB,CAKE,XVS,BUSD,USDT"
+    # BSC 代币地址映射，格式: SYMBOL=address,SYMBOL=address
     bsc_token_addresses: str = ""
+    # BSC 策略版本
     bsc_strategy_version: str = "bsc-mvp-v1"
+    # Base 链标识
     base_chain_id: str = "base"
+    # Base 默认监控代币列表
     base_default_symbols: str = "WETH,USDC,DEGEN,AERO,BRETT"
+    # Base 代币地址映射
     base_token_addresses: str = ""
+    # Base 策略版本
     base_strategy_version: str = "base-mvp-v1"
+    # Ethereum 链标识
     eth_chain_id: str = "eth"
+    # Ethereum 默认监控代币列表
     eth_default_symbols: str = "ETH,USDC,WBTC,PEPE,UNI"
+    # Ethereum 代币地址映射
     eth_token_addresses: str = ""
+    # Ethereum 策略版本
     eth_strategy_version: str = "eth-mvp-v1"
+    # Solana 链标识
     sol_chain_id: str = "sol"
+    # Solana 默认监控代币列表
     sol_default_symbols: str = "SOL,USDC,JUP,WIF,BONK"
+    # Solana 代币地址映射
     sol_token_addresses: str = ""
+    # Solana 策略版本
     sol_strategy_version: str = "sol-mvp-v1"
+    # 数据源策略优先级顺序，逗号分隔（第一个为主数据源）
     ingestion_strategy_order: str = "dexscreener,geckoterminal,birdeye"
 
     @property
