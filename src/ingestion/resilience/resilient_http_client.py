@@ -7,20 +7,13 @@ from time import monotonic
 import httpx
 from httpx import AsyncClient
 from src.ingestion.resilience.cache_store import ResponseCacheStore
-from src.ingestion.resilience.circuit_breaker import (
-    AsyncCircuitBreaker,
-    CircuitBreakerRegistry,
-    ProviderBackoffGuard,
-    ProviderBackoffRegistry,
-)
-from src.ingestion.resilience.metrics import (
-    INGEST_ERROR_TOTAL,
-    ResilienceMetrics,
-)
-from src.ingestion.resilience.rate_limiter import RateLimiterRegistry
+from src.ingestion.resilience.metrics import INGEST_ERROR_TOTAL, ResilienceMetrics
 from src.ingestion.resilience.retry_policy import RetryPolicy
 from src.ingestion.resilience.singleflight import SingleFlightGroup
 from src.shared.config import Settings
+from src.shared.resilience.backoff import BackoffGuard, BackoffRegistry
+from src.shared.resilience.circuit_breaker import AsyncCircuitBreaker, CircuitBreakerRegistry
+from src.shared.resilience.rate_limiter import RateLimiterRegistry
 
 logger = logging.getLogger(__name__)
 __all__ = ["ResilientHttpClient", "INGEST_ERROR_TOTAL"]
@@ -40,8 +33,7 @@ class ResilientHttpClient:
         self._headers = headers or {}
         self._metrics = ResilienceMetrics(chain_id=chain_id, provider=self._provider)
         self._bucket = RateLimiterRegistry.get_bucket(
-            provider=self._provider,
-            chain_id=self._chain_id,
+            name=f"{self._provider}.{self._chain_id}",
             rate_per_second=self._settings.get_market_data_rate_limit_per_second(
                 chain_id=self._chain_id,
                 provider=self._provider,
@@ -51,15 +43,14 @@ class ResilientHttpClient:
                 provider=self._provider,
             ),
         )
-        self._provider_backoff_guard: ProviderBackoffGuard = ProviderBackoffRegistry.get_guard(
-            provider=self._provider,
-            chain_id=self._chain_id,
+        self._backoff_guard: BackoffGuard = BackoffRegistry.get_guard(
+            name=f"{self._provider}.{self._chain_id}",
         )
-        self._provider_backoff_base_seconds = max(
+        self._backoff_base_seconds = max(
             0.1,
             float(self._settings.market_data_retry_base_seconds),
         )
-        self._provider_backoff_max_seconds = max(
+        self._backoff_max_seconds = max(
             0.5,
             float(self._settings.market_data_retry_max_sleep_seconds),
         )
@@ -128,7 +119,7 @@ class ResilientHttpClient:
     ) -> dict | None:
         breaker = await self._breaker_for_endpoint(endpoint=endpoint)
         now = monotonic()
-        if not self._provider_backoff_guard.allow_request(now=now):
+        if not self._backoff_guard.allow_request(now=now):
             self._metrics.circuit_open_state(endpoint=endpoint, opened=True)
             await self._record_circuit_blocked(endpoint=endpoint, now=now)
             self._metrics.request(endpoint=endpoint, status="blocked")
@@ -169,7 +160,7 @@ class ResilientHttpClient:
                     raise ValueError("unexpected non-dict payload")
                 self._metrics.request(endpoint=endpoint, status="success")
                 await breaker.record_success()
-                self._provider_backoff_guard.record_success()
+                self._backoff_guard.record_success()
                 await self._cache.set(url=url, payload=payload)
                 return payload
             except (httpx.HTTPError, ValueError) as exc:
@@ -186,10 +177,10 @@ class ResilientHttpClient:
                         exc,
                     )
                     await breaker.record_failure()
-                    self._provider_backoff_guard.record_failure(
+                    self._backoff_guard.record_failure(
                         now=monotonic(),
-                        base_seconds=self._provider_backoff_base_seconds,
-                        max_seconds=self._provider_backoff_max_seconds,
+                        base_seconds=self._backoff_base_seconds,
+                        max_seconds=self._backoff_max_seconds,
                     )
                     return None
                 if attempt >= max_attempts:
@@ -204,10 +195,10 @@ class ResilientHttpClient:
                         exc,
                     )
                     await breaker.record_failure()
-                    self._provider_backoff_guard.record_failure(
+                    self._backoff_guard.record_failure(
                         now=monotonic(),
-                        base_seconds=self._provider_backoff_base_seconds,
-                        max_seconds=self._provider_backoff_max_seconds,
+                        base_seconds=self._backoff_base_seconds,
+                        max_seconds=self._backoff_max_seconds,
                     )
                     return None
                 self._metrics.retry(endpoint=endpoint)
@@ -232,9 +223,7 @@ class ResilientHttpClient:
 
     async def _breaker_for_endpoint(self, endpoint: str) -> AsyncCircuitBreaker:
         return CircuitBreakerRegistry.get_breaker(
-            provider=self._provider,
-            chain_id=self._chain_id,
-            endpoint=endpoint,
+            name=f"{self._provider}.{self._chain_id}.{endpoint}",
             failure_threshold=self._settings.get_market_data_circuit_failure_threshold(
                 chain_id=self._chain_id
             ),
