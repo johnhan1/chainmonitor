@@ -81,7 +81,7 @@ scanner_cooldown_medium_seconds: int = 1800
 
 ```
 🔴 [85] SOL 1m — $PEPE
-  
+
 📊 评分明细
   聪明钱领先: 28/30 (smart_degen 8→23)
   排名加速:  18/20 (#42→#15)
