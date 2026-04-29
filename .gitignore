@@ -8,6 +8,7 @@ __pycache__/
 
 # Virtual env
 .venv/
+.worktrees/
 
 # Environment files
 .env
