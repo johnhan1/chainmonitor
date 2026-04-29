@@ -100,8 +100,8 @@ class ChainPipelineService:
     async def replay(self, ts_minute: datetime) -> PipelineRunSummary:
         run_ts = self._normalize_ts(ts_minute=ts_minute)
         self._validate_replay_window(run_ts=run_ts)
-        replay_limit = max(1, self.settings.pipeline_replay_max_in_flight_per_chain)
-        stale_seconds = int(max(60.0, self.settings.pipeline_run_timeout_seconds * 2))
+        replay_limit = max(1, self.settings.replay_max_in_flight_per_chain)
+        stale_seconds = int(max(60.0, self.settings.run_timeout_seconds * 2))
         strategy_version = self._chain_settings.get_strategy_version(chain_id=self.chain_id)
         run_id = uuid4().hex[:16]
         with self.repo.replay_lock(chain_id=self.chain_id) as acquired:
@@ -134,11 +134,11 @@ class ChainPipelineService:
         trigger: str,
     ) -> PipelineRunSummary:
         started_at = perf_counter()
-        deadline = started_at + max(5.0, self.settings.pipeline_run_timeout_seconds)
-        fetch_timeout = max(1.0, self.settings.pipeline_fetch_timeout_seconds)
-        feature_timeout = max(1.0, self.settings.pipeline_feature_timeout_seconds)
-        score_timeout = max(1.0, self.settings.pipeline_score_timeout_seconds)
-        persist_timeout = max(1.0, self.settings.pipeline_persist_timeout_seconds)
+        deadline = started_at + max(5.0, self.settings.run_timeout_seconds)
+        fetch_timeout = max(1.0, self.settings.fetch_timeout_seconds)
+        feature_timeout = max(1.0, self.settings.feature_timeout_seconds)
+        score_timeout = max(1.0, self.settings.score_timeout_seconds)
+        persist_timeout = max(1.0, self.settings.persist_timeout_seconds)
 
         try:
             ticks = await asyncio.wait_for(
@@ -389,10 +389,10 @@ class ChainPipelineService:
     def _validate_replay_window(self, run_ts: datetime) -> None:
         now_real = datetime.now(tz=UTC)
         now_ts = now_real.replace(second=0, microsecond=0)
-        lookback_minutes = max(1, self.settings.pipeline_replay_max_lookback_minutes)
+        lookback_minutes = max(1, self.settings.replay_max_lookback_minutes)
         if run_ts < now_ts - timedelta(minutes=lookback_minutes):
             raise ValueError("replay ts_minute is out of allowed lookback window")
-        future_skew_seconds = max(0, self.settings.pipeline_replay_max_future_skew_seconds)
+        future_skew_seconds = max(0, self.settings.replay_max_future_skew_seconds)
         if run_ts > now_real and (run_ts - now_real).total_seconds() > future_skew_seconds:
             raise ValueError("replay ts_minute is too far in the future")
 

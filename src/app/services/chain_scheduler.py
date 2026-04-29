@@ -24,7 +24,7 @@ class ChainPipelineScheduler:
         self.interval_seconds = max(10, interval_seconds)
         self.initial_delay_seconds = max(0, initial_delay_seconds)
         self.startup_jitter_seconds = max(0, startup_jitter_seconds)
-        self.catchup_windows = max(1, self.pipeline.settings.pipeline_scheduler_catchup_windows)
+        self.catchup_windows = max(1, self.pipeline.settings.catchup_windows)
         self.window_step_minutes = max(1, round(self.interval_seconds / 60))
         self._task: asyncio.Task | None = None
         self._last_window_ts: datetime | None = None
